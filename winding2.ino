@@ -35,10 +35,12 @@ Keypad keypad = Keypad( makeKeymap(keys), pin_rows, pin_column, ROW_NUM, COLUMN_
  * MENU DEFINITION
  *********************************/
 const char IDLE_APP = '0';
-const char RPM_EDIT = 'A';
-const char ROUNDS_EDIT = 'B';
+const char ROUNDS_EDIT = 'A';
+const char RPM_EDIT = 'B';
 const char DIR_EDIT = 'C';
 
+const char CW = 0;
+const char CCW = 1;
 
 /****************
  * APP STATE
@@ -47,9 +49,7 @@ const char DIR_EDIT = 'C';
 struct State {
   long maxRPM = 3000;
   long maxRounds = 0;
-
-  long tempMaxRPM = 0;
-  long tempMaxRounds = 0;
+  char dir = CW;
   
   char currentState = IDLE_APP;
   char programmingMode = LOW;
@@ -60,9 +60,7 @@ struct State state;
 
 
 void switchState(char menuKey, struct State *state) {
-  if (menuKey == RPM_EDIT) {
-    state->currentState = menuKey;
-  } else if (menuKey == ROUNDS_EDIT) {
+  if (menuKey == RPM_EDIT || menuKey == ROUNDS_EDIT || menuKey == DIR_EDIT) {
     state->currentState = menuKey;
   }
 }
@@ -71,25 +69,83 @@ void switchState(char menuKey, struct State *state) {
  * Settings
  */
 
+void contextMenuDirection() {
+  lcd.setCursor (0,2);
+  lcd.print ("1=cw 2=ccw");
+  lcd.setCursor(0,3);
+  lcd.print ("#=confirm *=cancel  ");
+}
+
+void clearContextMenuDirection() {
+  lcd.setCursor (0,2);
+  lcd.print ("                    ");
+  lcd.setCursor(0,3);
+  lcd.print ("                    ");
+}
+
+char inputDirection (char d, int col, int row) {
+  char exit = '#';
+  char key = 'x';
+
+  bool set = false;
+  char output = d;
+
+  contextMenuDirection();
+
+  while (key!=exit) {
+    lcd.setCursor(col,row); 
+    lcd.blink();
+    key = keypad.getKey() ;
+      
+    if (key == '1') {
+      output = CW;
+      lcd.setCursor (col,row);
+      lcd.print("cw ");
+    }
+    if (key == '2') {
+      output = CCW;
+      lcd.setCursor (col,row);
+      lcd.print("ccw");
+    }
+
+    if (key == '*') {
+      lcd.noBlink();
+      clearContextMenuDirection();
+      return d;
+    }
+  }
+  lcd.noBlink();
+  clearContextMenuDirection();
+  return output;
+}
+
+void contextMenuNumber() {
+  lcd.setCursor(0,3);
+  lcd.print ("#=confirm *=cancel  ");
+}
+
+void clearContextMenuNumber() {
+  lcd.setCursor(0,3);
+  lcd.print ("                    ");
+}
+
+
 long inputNumberB(long d, int col, int row, int maxDigits) {
   long number = 0;
   char exit = '#';
   char key = 'x';
   int digits = 0;
+
+  contextMenuNumber();
   
-  while(key != exit) {
+  while(key!=exit) {
     lcd.setCursor(col,row); 
     lcd.blink();
     
     key = keypad.getKey();
-    if (key!= NO_KEY) {
-      Serial.print ("in ");
-      Serial.println (key);
-    }
     if ((key == '1' || key == '2' || key == '3' || key == '4' || key == '5' || key == '6' || key == '7' || key == '8' || key == '9' || key == '0')) {
       if (digits < maxDigits) {
         number = (number * 10 + ((long) key - 48));
-        Serial.println(number);
         digits++;
       }
 
@@ -105,53 +161,17 @@ long inputNumberB(long d, int col, int row, int maxDigits) {
       }
     }
     else if (key == '*') {
-      Serial.print ("cancelled");
       lcd.noBlink();
+      clearContextMenuNumber();
       return d;
     }
   }
-
-  Serial.print ("inputed");
-  Serial.println (number);
   lcd.noBlink();
+  clearContextMenuNumber();
   return number;
 }
 
-void confirmData(char key, struct State *state) {
-  if (key != '#') return;
-  
-  if (state->currentState == ROUNDS_EDIT) {
-    state->maxRounds = state->tempMaxRounds;
-    state->tempMaxRounds = 0;
-    state->currentState = IDLE_APP;
-  }
 
-  if (state->currentState == RPM_EDIT) {
-    state->maxRPM = state->tempMaxRPM;
-    state->tempMaxRPM = 0;
-    state->currentState = IDLE_APP;
-  }
-}
-
-void deleteData(char key, struct State *state) {
-  if (key != '*') return;
-  
-  if (state->currentState == ROUNDS_EDIT) {
-    state->tempMaxRounds = 0;
-    state->currentState = IDLE_APP;
-  }
-
-  if (state->currentState == RPM_EDIT) {
-    state->tempMaxRPM = 0;
-    state->currentState = IDLE_APP;
-  }
-}
-
-
-void resetState(struct State *state) {
-  state->tempMaxRPM = 0;
-  state->tempMaxRounds = 0;
-}
 
 void readyScreen() {
   lcd.setCursor(7, 0); // Set the cursor on the first column and first row.
@@ -170,6 +190,7 @@ void splashScreen() {
   lcd.print("(c) Lorenzo Iannone"); // Print the string "Hello World!"
   
   delay(400);
+  readyScreen();
 }
 
 
@@ -185,35 +206,44 @@ void editWhenEditState(struct State *state) {
     state->currentState = IDLE_APP;
     stateSummary(state);
  }
+
+ 
+ if (state->currentState == DIR_EDIT) {
+    state->dir = inputDirection(state->dir, 6,1);
+    state->currentState = IDLE_APP;
+    stateSummary(state);
+ }
 }
 
 void stateSummary(State *state) {
   if (state->programmingMode == HIGH || state->currentState==IDLE_APP) {
     lcd.setCursor(0,0);
-    lcd.print("Turns:");
+    lcd.print("turns:");
     lcd.setCursor(6,0);
     char r[5];
     sprintf(r, "%-5d", state->maxRounds);
     lcd.print(r);
     
     lcd.setCursor(12,0);
-    lcd.print("Rpm:");
+    lcd.print("rpm:");
     char t[4];
     sprintf(t, "%-4d", state->maxRPM);
     lcd.setCursor(16,0);
     lcd.print(t);
 
+    lcd.setCursor(0,1);
+    lcd.print("dir. :");
+    lcd.setCursor(6,1);
+    if (state->dir == CW) {
+      lcd.print("cw ");
+    } else {
+      lcd.print("ccw ");
+    }
+
     lcd.setCursor(0,3);
-    lcd.print("A Rpm,B Turns,C Dir");
+    lcd.print("A=turns B=rpm C=dir");
 
   }
-}
-
-int compareState(struct State *prev, struct State *cur) {
-  if ( prev->maxRPM != cur->maxRPM || prev->maxRounds!=cur->maxRounds) {
-    return 0;
-  }
-  return 1;
 }
 
 void setup() {
@@ -249,7 +279,6 @@ void spinLoop(struct State*state, struct State* prevState) {
       lcd.clear();
       readyScreen();
     }
-    resetState(state);
 }
 
 void loop() {
