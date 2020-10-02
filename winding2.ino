@@ -230,30 +230,37 @@ void setup() {
   lcd.clear();
 }
 
+void programmingLoop(struct State*state, struct State* prevState) {
+
+    //if there is a transition in the programming mode pin then clear the screen to display the new state
+    if (prevState->programmingMode == LOW) {
+      lcd.clear();
+      stateSummary(state);
+    }
+    
+    char key = keypad.getKey();
+
+    switchState(key, state);
+    editWhenEditState(state);  
+}
+
+void spinLoop(struct State*state, struct State* prevState) {
+    if (prevState->programmingMode == HIGH) {
+      lcd.clear();
+      readyScreen();
+    }
+    resetState(state);
+}
+
 void loop() {
-  struct State previousState;
-  memcpy (&previousState, &state, sizeof (struct State));
-  
-  char previousProgramming = state.programmingMode;
+  struct State prevState;
+  memcpy (&prevState, &state, sizeof (struct State));
   
   state.programmingMode = digitalRead(PROG_PIN);
   
   if (state.programmingMode == HIGH) {
-
-    if (previousProgramming != HIGH) {
-      lcd.clear();
-      stateSummary(&state);
-    }
-    
-    char key1 = keypad.getKey();
-
-    switchState(key1, &state);
-    editWhenEditState(&state);
+    programmingLoop(&state, &prevState);
   } else {
-    if (previousProgramming != LOW) {
-      lcd.clear();
-      readyScreen();
-    }
-    resetState(&state);
+    spinLoop(&state, &prevState);
   }
 }
