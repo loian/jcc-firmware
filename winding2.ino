@@ -53,6 +53,8 @@ struct State {
   
   char currentState = IDLE_APP;
   char programmingMode = LOW;
+
+  bool boot = true;
 };
 
 struct State state;
@@ -174,8 +176,25 @@ long inputNumberB(long d, int col, int row, int maxDigits) {
 
 
 void readyScreen() {
-  lcd.setCursor(7, 0); // Set the cursor on the first column and first row.
-  lcd.print("Ready"); // Print the string "Hello World!"
+  lcd.setCursor(0, 0);
+  lcd.print("       Ready.       ");
+  lcd.setCursor(0,1);
+  lcd.print("Please,set the speed");
+  lcd.setCursor(0,2);
+  lcd.print("to zero and press D ");
+  lcd.setCursor(0,3);
+  lcd.print("when ready.         ");
+}
+
+void goToProgramScreen() {
+  lcd.setCursor(0, 0); // Set the cursor on the first column and first row.
+  lcd.print("   Program needed.  "); // Print the string "Hello World!"
+  lcd.setCursor(0,1);
+  lcd.print("Please, switch to   ");
+  lcd.setCursor(0,2);
+  lcd.print("program mode and set");
+  lcd.setCursor(0,3);
+  lcd.print("the number of turns.");
 }
 
 void splashScreen() {
@@ -275,9 +294,16 @@ void programmingLoop(struct State*state, struct State* prevState) {
 }
 
 void spinLoop(struct State*state, struct State* prevState) {
-    if (prevState->programmingMode == HIGH) {
-      lcd.clear();
-      readyScreen();
+    if (prevState->programmingMode == HIGH || state->boot == true) {
+      if (state->boot == true) {
+        state->boot = false;
+      }
+
+      if (state->maxRounds == 0) {
+        goToProgramScreen();
+      } else {
+        readyScreen();  
+      }
     }
 }
 
