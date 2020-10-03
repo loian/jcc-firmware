@@ -11,7 +11,7 @@ LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4); // Change to (0x27,16,2)
 const int PROG_PIN = 30;
 const int OHM_MODE_PIN = 31;
 const int OHM_VALUE_PIN = 0;
-
+const int OPTICAL_SENSOR = 3;
 
 /****************************
  * OHM METER
@@ -60,6 +60,7 @@ struct State {
   long maxRPM = 3000;
   long maxRounds = 0;
   char dir = CW;
+  long rounds = 0;
   
   char currentState = IDLE_APP;
   int programmingMode = LOW;
@@ -214,7 +215,7 @@ void splashScreen() {
   lcd.setCursor(0, 3); // Set the cursor on the first column and first row.
   lcd.print("(c) Lorenzo Iannone"); // Print the string "Hello World!"
   
-  delay(400);
+  delay(3000);
   readyScreen();
 }
 
@@ -238,6 +239,12 @@ void editWhenEditState(struct State *state) {
     state->currentState = IDLE_APP;
     stateSummary(state);
  }
+}
+
+void resetState() {
+  state.maxRounds = 0;
+  state.dir = 0;
+  state.maxRPM = 3000;
 }
 
 void stateSummary(State *state) {
@@ -276,11 +283,12 @@ void ohmMeterScreen() {
    lcd.print ("0.00 K Ohm         ");
 }
 
+
 void setup() {
   // put your setup code here, to run once:
   pinMode (PROG_PIN, INPUT_PULLUP);
   pinMode (OHM_MODE_PIN, INPUT_PULLUP);
-
+  pinMode (OPTICAL_SENSOR, INPUT_PULLUP);
   Serial.begin(9600);
   Serial.println("Ready");                               
 
@@ -313,11 +321,34 @@ void spinLoop(struct State*state, struct State* prevState) {
       if (state->maxRounds == 0) {
         goToProgramScreen();
       } else {
-        readyScreen();  
+        lcd.clear();
+        countLoop(state);
       }
     }
 }
 
+void countLoop(struct State *state) {
+  int prev = LOW;
+  unsigned int count = 0;
+  char key = 'x';
+
+  while (key != 'D') {
+    int read = digitalRead(3);
+    key = keypad.getKey();
+    
+    if (read==HIGH && prev ==LOW) {
+      count++;
+      lcd.setCursor(5,1);
+      lcd.print(count);
+      lcd.print("/");
+      lcd.print(state->maxRounds);
+    }
+    prev = read;
+  }
+  
+
+  
+}
 
 void ohmmeterLoop(struct State*state, struct State* prevState) {
   if (prevState->ohmMeterMode == LOW) {
@@ -344,9 +375,6 @@ void ohmmeterLoop(struct State*state, struct State* prevState) {
         Vout = (buffer)/1024.0;
         buffer = (VIN/Vout) - 1;
         R2 = RESISTANCE * buffer;
-        Serial.print ("R2 ");
-        Serial.println(R2);
-
 
         if (R2>MIN_OHM && R2<MAX_OHM) {          
           total = total+R2;
@@ -363,7 +391,6 @@ void ohmmeterLoop(struct State*state, struct State* prevState) {
         lcd.print (".");
         char d[2];
         sprintf(d, "%02d", (ohm - ohm/1000*1000)/10);
-        Serial.println(d);
         lcd.print(d);
         lcd.print(" K Ohm        ");
       }
@@ -371,7 +398,9 @@ void ohmmeterLoop(struct State*state, struct State* prevState) {
   }
   
 }
-
+int count = 0;
+int p = LOW;
+int r = LOW;
 
 void loop() {
   struct State prevState;
@@ -380,13 +409,12 @@ void loop() {
   state.programmingMode = digitalRead(PROG_PIN);
   state.ohmMeterMode = digitalRead(OHM_MODE_PIN);
 
-  Serial.println(state.ohmMeterMode);
-
   if (state.programmingMode == HIGH) {
     programmingLoop(&state, &prevState);
   }  else if (state.ohmMeterMode == HIGH) {
       ohmmeterLoop(&state, &prevState);
   } else {
     spinLoop(&state, &prevState);
+    resetState();
   }
 }
