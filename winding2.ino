@@ -10,6 +10,7 @@ LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4); // Change to (0x27,16,2)
  *****************************/
 const int PROG_PIN = 30;
 const int OHM_MODE_PIN = 31;
+const int INDUCTANCE_MODE_PIN = 32;
 const int OHM_VALUE_PIN = 0;
 const int OPTICAL_SENSOR = 3;
 const int SCATTER_PIN = 8;
@@ -109,6 +110,7 @@ struct State {
   char currentState = IDLE_APP;
   int programmingMode = LOW;
   int ohmMeterMode = LOW;
+  int inductanceMeterMode = LOW;
   bool boot = true;
 
   unsigned long prevScatterTs = 0;
@@ -326,30 +328,10 @@ void ohmMeterScreen() {
    lcd.print("       ");
 }
 
-
-void setup() {
-  pinMode (PROG_PIN, INPUT_PULLUP);
-  pinMode (OHM_MODE_PIN, INPUT_PULLUP);
-  pinMode (OPTICAL_SENSOR, INPUT_PULLUP);
-  
-  Serial.begin(9600);
-  Serial.println("Ready");                               
-
-  //Initialise the scatter motor
-  Serial.println("Positioning scatter motor");
-  Serial.println("scatter motor ok");
-  
-  // Initiate the LCD:
-  lcd.init();
-
-  lcd.createChar(OHM_CHAR, ohmChar);
-  lcd.createChar(ISTO_OFF_CHAR, istoOffChar);
-  lcd.createChar(ISTO_ON_CHAR, istoOnChar);
-
-  
-  lcd.backlight();
-  splashScreen();
-  lcd.clear();
+void inductanceMeterScreen() {
+   lcd.setCursor(6,1);
+   lcd.print (" 0.00 H");
+   lcd.print("       ");
 }
 
 void programmingLoop(struct State*state, struct State* prevState) {
@@ -437,8 +419,15 @@ void countLoop(struct State *state) {
   scatterMotor.detach(); // start servo control  
 }
 
-void ohmmeterLoop(struct State*state, struct State* prevState) {
-  if (prevState->ohmMeterMode == LOW) {
+void inductanceMeterLoop(struct State *state, struct State* prevState) {
+  if (prevState->inductanceMeterMode == LOW || prevState->programmingMode == HIGH || prevState->ohmMeterMode == HIGH) {
+    lcd.clear(); 
+    inductanceMeterScreen(); 
+  }
+}
+
+void ohmMeterLoop(struct State*state, struct State* prevState) {
+  if (prevState->ohmMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH) {
     lcd.clear(); 
     ohmMeterScreen();
   }
@@ -508,18 +497,47 @@ int count = 0;
 int p = LOW;
 int r = LOW;
 
+void setup() {
+  pinMode (PROG_PIN, INPUT_PULLUP);
+  pinMode (OHM_MODE_PIN, INPUT_PULLUP);
+  pinMode (OPTICAL_SENSOR, INPUT_PULLUP);
+  pinMode (INDUCTANCE_MODE_PIN, INPUT_PULLUP);
+  
+  Serial.begin(9600);
+  Serial.println("Ready");                               
+
+  //Initialise the scatter motor
+  Serial.println("Positioning scatter motor");
+  Serial.println("scatter motor ok");
+  
+  // Initiate the LCD:
+  lcd.init();
+
+  lcd.createChar(OHM_CHAR, ohmChar);
+  lcd.createChar(ISTO_OFF_CHAR, istoOffChar);
+  lcd.createChar(ISTO_ON_CHAR, istoOnChar);
+
+  
+  lcd.backlight();
+  splashScreen();
+  lcd.clear();
+}
+
 void loop() {
-scatterMotor.write(180);
+  
   struct State prevState;
   memcpy (&prevState, &state, sizeof (struct State));
 
   state.programmingMode = digitalRead(PROG_PIN);
   state.ohmMeterMode = digitalRead(OHM_MODE_PIN);
+  state.inductanceMeterMode = digitalRead(INDUCTANCE_MODE_PIN);
 
-  if (state.programmingMode == HIGH) {
+  if (state.programmingMode == HIGH ) {
     programmingLoop(&state, &prevState);
   }  else if (state.ohmMeterMode == HIGH) {
-      ohmmeterLoop(&state, &prevState);
+      ohmMeterLoop(&state, &prevState);
+  } else if (state.inductanceMeterMode == HIGH) {
+      inductanceMeterLoop(&state, &prevState);
   } else {
     spinLoop(&state, &prevState);
     resetState();
