@@ -144,6 +144,11 @@ void clearContextMenuDirection() {
   lcd.print ("                    ");
 }
 
+void countLoopContextMenu() {
+  lcd.setCursor(0,3);
+  lcd.print ("A=start D=exit");
+}
+
 char inputDirection (char d, int col, int row) {
   char exit = '#';
   char key = 'x';
@@ -362,38 +367,16 @@ void spinLoop(struct State*state, struct State* prevState) {
     }
 }
 
-void countLoop(struct State *state) {
-  scatterMotor.attach(SCATTER_PIN); // start servo control
-  
-  int prev = LOW;
-  int read = HIGH;
-  int count = -1;
-  char key = 'x';
-
-  lcd.setCursor(0,3);
-  lcd.print ("D=exit");
-
-  while (key != 'D') {
-
-    scatter(state);
-
-    
-    read = digitalRead(3);
-    key = keypad.getKey();
-    
-    if (read==HIGH && prev ==LOW) {
-      count++;
-      lcd.setCursor(8-(int)log10(count),1);
-      lcd.print(count);
-      lcd.print("/");
-
-      
-      lcd.print(state->maxRounds);
-      lcd.print("     ");
-    }
-
+void countLoopScreen(int count, long maxRounds) {
+    lcd.setCursor(8-(int)log10(count),1);
+    lcd.print(count);
+    lcd.print("/");
+    lcd.print(maxRounds);
+    lcd.print("     ");
+}
+void countIstogram(int count, long maxRounds) {
     int on;
-    on = 12 * count / state->maxRounds;
+    on = 12 * count / maxRounds;
     int off;
     off = 12 - on;
     
@@ -404,6 +387,39 @@ void countLoop(struct State *state) {
     for (int x=0; x<off; x++) {
       lcd.write(ISTO_OFF_CHAR);  
     }
+}
+
+void countLoop(struct State *state) {
+  
+  int prev = LOW;
+  int read = HIGH;
+  int count = -1;
+  char key = 'x';
+  
+  scatterMotor.attach(SCATTER_PIN); // start servo control
+
+  countLoopContextMenu();
+  countLoopScreen(0,state->maxRounds);
+  countIstogram(0,state->maxRounds);
+  
+  while (key!='A' && key!='D') {
+    key = keypad.getKey();
+    if(key=='D') {
+      return;
+    }
+  }
+
+  while (key != 'D') {
+    scatter(state);  
+    read = digitalRead(3);
+    key = keypad.getKey();
+    
+    if (read==HIGH && prev ==LOW) {
+      count++;
+      countLoopScreen(count, state->maxRounds);
+    }
+    
+    countIstogram(count,state->maxRounds);
 
     if (count >= state->maxRounds) {
       lcd.setCursor(4,2);
