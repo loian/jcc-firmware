@@ -196,19 +196,12 @@ long inputNumberB(long d, int col, int row, int maxDigits) {
     if ((key == '1' || key == '2' || key == '3' || key == '4' || key == '5' || key == '6' || key == '7' || key == '8' || key == '9' || key == '0')) {
       if (digits < maxDigits) {
         number = (number * 10 + ((long) key - 48));
+        Serial.println(number);
         digits++;
       }
 
       lcd.setCursor(col,row);
-      if (maxDigits == 4) {
-        char r[4];
-        sprintf(r, "%-4d", number);
-        lcd.print(r);
-      } else {
-        char r[5];
-        sprintf(r, "%-5d", number);
-        lcd.print(r);
-      }
+      lcd.print(number);
     }
     else if (key == '*') {
       lcd.noBlink();
@@ -291,14 +284,14 @@ void stateSummary(State *state) {
     lcd.setCursor(0,0);
     lcd.print("turns:");
     lcd.setCursor(6,0);
-    char r[5];
-    sprintf(r, "%-5d", state->maxRounds);
+    char r[32];
+    sprintf(r, "%-5ld", state->maxRounds);
     lcd.print(r);
     
     lcd.setCursor(12,0);
     lcd.print("rpm:");
-    char t[4];
-    sprintf(t, "%-4d", state->maxRPM);
+    char t[32];
+    sprintf(t, "%-4ld", state->maxRPM);
     lcd.setCursor(16,0);
     lcd.print(t);
 
@@ -322,15 +315,6 @@ void ohmMeterScreen() {
    lcd.print (" 0.00 K");
    lcd.write(OHM_CHAR);
    lcd.print("       ");
-
-   lcd.setCursor(6,2);
-   lcd.write(ISTO_ON_CHAR);
-   lcd.write(ISTO_ON_CHAR);
-   lcd.write(ISTO_ON_CHAR);
-   lcd.write(ISTO_OFF_CHAR);   
-   lcd.write(ISTO_OFF_CHAR);   
-   lcd.write(ISTO_OFF_CHAR);   
-   lcd.write(ISTO_OFF_CHAR);   
 }
 
 
@@ -385,21 +369,48 @@ void spinLoop(struct State*state, struct State* prevState) {
 
 void countLoop(struct State *state) {
   int prev = LOW;
-  unsigned int count = 0;
+  int read = HIGH;
+  int count = -1;
   char key = 'x';
 
+  lcd.setCursor(0,3);
+  lcd.print ("D=exit");
+
   while (key != 'D') {
-    int read = digitalRead(3);
+    read = digitalRead(3);
     key = keypad.getKey();
     
     if (read==HIGH && prev ==LOW) {
       count++;
-      lcd.setCursor(5,1);
+      lcd.setCursor(8-(int)log10(count),1);
       lcd.print(count);
       lcd.print("/");
+
+      
       lcd.print(state->maxRounds);
+      lcd.print("     ");
+    }
 
+    int on;
+    on = 12 * count / state->maxRounds;
+    int off;
+    off = 12 - on;
+    
+    lcd.setCursor(4,2);
+    for (int x=0; x<on; x++) {
+      lcd.write(ISTO_ON_CHAR);  
+    }
+    for (int x=0; x<off; x++) {
+      lcd.write(ISTO_OFF_CHAR);  
+    }
 
+    if (count >= state->maxRounds) {
+      lcd.setCursor(4,2);
+      lcd.print ("  complete  ");
+      while (keypad.getKey() !='D') {
+        //nop
+      }
+      return;
     }
     prev = read;
   }
@@ -445,11 +456,11 @@ void ohmmeterLoop(struct State*state, struct State* prevState) {
         }
         
         lcd.setCursor(6,1);
-        char u[2];
+        char u[32];
         sprintf(u, "%2d", (ohm/1000));
         lcd.print (u);
         lcd.print (".");
-        char d[2];
+        char d[32];
         sprintf(d, "%02d", (ohm - ohm/1000*1000)/10);
         lcd.print(d);
         lcd.print(" K");   
