@@ -1,5 +1,5 @@
 #include <LiquidCrystal_I2C.h> // Library for LCD
-
+#include <Servo.h>
 #include <Keypad.h>
 
 
@@ -12,6 +12,7 @@ const int PROG_PIN = 30;
 const int OHM_MODE_PIN = 31;
 const int OHM_VALUE_PIN = 0;
 const int OPTICAL_SENSOR = 3;
+const int SCATTER_PIN = 8;
 
 /****************************
  * OHM METER
@@ -40,6 +41,10 @@ byte pin_rows[ROW_NUM] = {29, 28, 27, 26}; //connect to the row pinouts of the k
 byte pin_column[COLUMN_NUM] = {25, 24, 23, 22}; //connect to the column pinouts of the keypad
 Keypad keypad = Keypad( makeKeymap(keys), pin_rows, pin_column, ROW_NUM, COLUMN_NUM );
 
+/****************************
+ * SCATTER MOTOR
+ ***************************/
+Servo scatterMotor;
 
 /*********************************
  * MENU DEFINITION
@@ -105,6 +110,10 @@ struct State {
   int programmingMode = LOW;
   int ohmMeterMode = LOW;
   bool boot = true;
+
+  unsigned long prevScatterTs = 0;
+  int scatterPos = 0;
+  
 };
 
 struct State state;
@@ -319,13 +328,17 @@ void ohmMeterScreen() {
 
 
 void setup() {
-  // put your setup code here, to run once:
   pinMode (PROG_PIN, INPUT_PULLUP);
   pinMode (OHM_MODE_PIN, INPUT_PULLUP);
   pinMode (OPTICAL_SENSOR, INPUT_PULLUP);
+  
   Serial.begin(9600);
   Serial.println("Ready");                               
 
+  //Initialise the scatter motor
+  Serial.println("Positioning scatter motor");
+  Serial.println("scatter motor ok");
+  
   // Initiate the LCD:
   lcd.init();
 
@@ -368,6 +381,8 @@ void spinLoop(struct State*state, struct State* prevState) {
 }
 
 void countLoop(struct State *state) {
+  scatterMotor.attach(SCATTER_PIN); // start servo control
+  
   int prev = LOW;
   int read = HIGH;
   int count = -1;
@@ -377,6 +392,10 @@ void countLoop(struct State *state) {
   lcd.print ("D=exit");
 
   while (key != 'D') {
+
+    scatter(state);
+
+    
     read = digitalRead(3);
     key = keypad.getKey();
     
@@ -410,13 +429,12 @@ void countLoop(struct State *state) {
       while (keypad.getKey() !='D') {
         //nop
       }
+      scatterMotor.detach(); // start servo control
       return;
     }
     prev = read;
   }
-  
-
-  
+  scatterMotor.detach(); // start servo control  
 }
 
 void ohmmeterLoop(struct State*state, struct State* prevState) {
@@ -470,11 +488,28 @@ void ohmmeterLoop(struct State*state, struct State* prevState) {
   }
 }
 
+void scatter(struct State *state) {
+      
+    unsigned long curTime = millis();
+    if (curTime - state->prevScatterTs > 350) {
+      Serial.println("SCATTER");
+      state->prevScatterTs = curTime;
+
+      if (state->scatterPos == 0) {
+        state->scatterPos = 180;
+      } else {   
+        state->scatterPos = 0;
+      }
+      scatterMotor.write(state->scatterPos);
+    }
+}
+
 int count = 0;
 int p = LOW;
 int r = LOW;
 
 void loop() {
+scatterMotor.write(180);
   struct State prevState;
   memcpy (&prevState, &state, sizeof (struct State));
 
