@@ -52,6 +52,45 @@ const char DIR_EDIT = 'C';
 const char CW = 0;
 const char CCW = 1;
 
+/**************************
+ * CUSTOM CHARACTERS
+ **************************/
+const int OHM_CHAR = 0; 
+const int ISTO_OFF_CHAR = 1; 
+const int ISTO_ON_CHAR = 2; 
+
+byte ohmChar[] = {
+  B01110,
+  B10001,
+  B10001,
+  B10001,
+  B01010,
+  B01010,
+  B11011,
+  B00000
+};
+
+byte istoOffChar[] = {
+  B10101,
+  B01010,
+  B10101,
+  B01010,
+  B10101,
+  B01010,
+  B10101,
+  B00000
+};
+
+byte istoOnChar[] = {
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B00000
+};
 /****************
  * APP STATE
  *****************/
@@ -279,8 +318,19 @@ void stateSummary(State *state) {
 }
 
 void ohmMeterScreen() {
-   lcd.setCursor(5,1);
-   lcd.print ("0.00 K Ohm         ");
+   lcd.setCursor(6,1);
+   lcd.print (" 0.00 K");
+   lcd.write(OHM_CHAR);
+   lcd.print("       ");
+
+   lcd.setCursor(6,2);
+   lcd.write(ISTO_ON_CHAR);
+   lcd.write(ISTO_ON_CHAR);
+   lcd.write(ISTO_ON_CHAR);
+   lcd.write(ISTO_OFF_CHAR);   
+   lcd.write(ISTO_OFF_CHAR);   
+   lcd.write(ISTO_OFF_CHAR);   
+   lcd.write(ISTO_OFF_CHAR);   
 }
 
 
@@ -294,6 +344,12 @@ void setup() {
 
   // Initiate the LCD:
   lcd.init();
+
+  lcd.createChar(OHM_CHAR, ohmChar);
+  lcd.createChar(ISTO_OFF_CHAR, istoOffChar);
+  lcd.createChar(ISTO_ON_CHAR, istoOnChar);
+
+  
   lcd.backlight();
   splashScreen();
   lcd.clear();
@@ -342,6 +398,8 @@ void countLoop(struct State *state) {
       lcd.print(count);
       lcd.print("/");
       lcd.print(state->maxRounds);
+
+
     }
     prev = read;
   }
@@ -386,18 +444,21 @@ void ohmmeterLoop(struct State*state, struct State* prevState) {
           total = 0;
         }
         
-        lcd.setCursor(5,1);
-        lcd.print (ohm/1000);
+        lcd.setCursor(6,1);
+        char u[2];
+        sprintf(u, "%2d", (ohm/1000));
+        lcd.print (u);
         lcd.print (".");
         char d[2];
         sprintf(d, "%02d", (ohm - ohm/1000*1000)/10);
         lcd.print(d);
-        lcd.print(" K Ohm        ");
-      }
-    
+        lcd.print(" K");   
+        lcd.write(OHM_CHAR);   
+        lcd.print("   ");   
+    }    
   }
-  
 }
+
 int count = 0;
 int p = LOW;
 int r = LOW;
