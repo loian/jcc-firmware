@@ -27,6 +27,7 @@ const long unsigned MAX_OHM = 50000;
 const int VIN = 5;
 
 
+
 /******************************************
  * Keypad initialisaztion
  *****************************************/
@@ -106,7 +107,7 @@ byte istoOnChar[] = {
 struct State {
   long maxRPM = 3000;
   long maxRounds = 0;
-  char dir = CW;
+  char dir = CCW;
   long rounds = 0;
   
   char currentState = IDLE_APP;
@@ -136,7 +137,7 @@ void switchState(char menuKey, struct State *state) {
 
 void contextMenuDirection() {
   lcd.setCursor (0,2);
-  lcd.print ("1=cw 2=ccw");
+  lcd.print ("1=ccw 2=cw");
   lcd.setCursor(0,3);
   lcd.print ("#=confirm *=cancel  ");
 }
@@ -168,14 +169,14 @@ char inputDirection (char d, int col, int row) {
     key = keypad.getKey() ;
       
     if (key == '1') {
-      output = CW;
-      lcd.setCursor (col,row);
-      lcd.print("cw ");
-    }
-    if (key == '2') {
       output = CCW;
       lcd.setCursor (col,row);
       lcd.print("ccw");
+    }
+    if (key == '2') {
+      output = CW;
+      lcd.setCursor (col,row);
+      lcd.print("cw ");
     }
 
     if (key == '*') {
@@ -221,6 +222,10 @@ long inputNumberB(long d, int col, int row, int maxDigits) {
       }
 
       lcd.setCursor(col,row);
+      for (int x=0; x<maxDigits; x++) {
+        lcd.print(" ");
+      }
+      lcd.setCursor(col,row);
       lcd.print(number);
     }
     else if (key == '*') {
@@ -253,7 +258,7 @@ void goToProgramScreen() {
   lcd.setCursor(0,2);
   lcd.print("program mode and set");
   lcd.setCursor(0,3);
-  lcd.print("the number of turns.");
+  lcd.print("turns and max rpm.");
 }
 
 void splashScreen() {
@@ -368,7 +373,7 @@ void spinLoop(struct State*state, struct State* prevState) {
       if (state->boot == true) {
         state->boot = false;
       }
-      if (state->maxRounds == 0) {
+      if (state->maxRounds == 0 || state->maxRPM == 0) {
         goToProgramScreen();
       } else {
         lcd.clear();
