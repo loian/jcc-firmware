@@ -11,6 +11,8 @@ LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4); // Change to (0x27,16,2)
 const int PROG_PIN = 30;
 const int OHM_MODE_PIN = 31;
 const int INDUCTANCE_MODE_PIN = 32;
+const int GAUSS_MODE_PIN = 33;
+const int ENABLE_SCATTER_PIN = 34;
 const int OHM_VALUE_PIN = 0;
 const int OPTICAL_SENSOR = 3;
 const int SCATTER_PIN = 8;
@@ -111,10 +113,12 @@ struct State {
   int programmingMode = LOW;
   int ohmMeterMode = LOW;
   int inductanceMeterMode = LOW;
+  int gaussMeterMode = LOW;
   bool boot = true;
 
   unsigned long prevScatterTs = 0;
   int scatterPos = 0;
+  int scatterEnabled = HIGH;
   
 };
 
@@ -333,6 +337,12 @@ void ohmMeterScreen() {
    lcd.print("       ");
 }
 
+
+void gaussMeterScreen() {
+   lcd.setCursor(6,1);
+   lcd.print (" 00.0 G     ");
+}
+
 void inductanceMeterScreen() {
    lcd.setCursor(6,1);
    lcd.print (" 0.00 H");
@@ -411,7 +421,8 @@ void countLoop(struct State *state) {
 
   while (key != 'D') {
     scatter(state);  
-    read = digitalRead(3);
+    read = digitalRead(OPTICAL_SENSOR);
+    
     key = keypad.getKey();
     
     if (read==HIGH && prev ==LOW) {
@@ -436,17 +447,33 @@ void countLoop(struct State *state) {
 }
 
 void inductanceMeterLoop(struct State *state, struct State* prevState) {
-  if (prevState->inductanceMeterMode == LOW || prevState->programmingMode == HIGH || prevState->ohmMeterMode == HIGH) {
+  if (prevState->inductanceMeterMode == LOW || prevState->programmingMode == HIGH || prevState->ohmMeterMode == HIGH || prevState->gaussMeterMode == HIGH) {
     lcd.clear(); 
     inductanceMeterScreen(); 
+    }
+ 
+    while (state->inductanceMeterMode == HIGH) {
+      state->inductanceMeterMode = digitalRead(INDUCTANCE_MODE_PIN);
+    }
+}
+
+
+void gaussMeterLoop(struct State*state, struct State* prevState) {
+  if (prevState->gaussMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH || state->ohmMeterMode == HIGH) {
+    lcd.clear(); 
+    gaussMeterScreen();
+  }  
+  while (state->gaussMeterMode == HIGH) {
+    state->gaussMeterMode = digitalRead(GAUSS_MODE_PIN);
   }
 }
 
 void ohmMeterLoop(struct State*state, struct State* prevState) {
-  if (prevState->ohmMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH) {
+  if (prevState->ohmMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH || prevState->gaussMeterMode == HIGH) {
     lcd.clear(); 
     ohmMeterScreen();
   }
+
 
   int raw = 0;
   float Vout = 0;
@@ -494,7 +521,8 @@ void ohmMeterLoop(struct State*state, struct State* prevState) {
 }
 
 void scatter(struct State *state) {
-      
+  state->scatterEnabled = digitalRead(ENABLE_SCATTER_PIN);
+  if (state->scatterEnabled == HIGH) {   
     unsigned long curTime = millis();
     if (curTime - state->prevScatterTs > 350) {
       Serial.println("SCATTER");
@@ -507,6 +535,7 @@ void scatter(struct State *state) {
       }
       scatterMotor.write(state->scatterPos);
     }
+  }
 }
 
 int count = 0;
@@ -518,6 +547,9 @@ void setup() {
   pinMode (OHM_MODE_PIN, INPUT_PULLUP);
   pinMode (OPTICAL_SENSOR, INPUT_PULLUP);
   pinMode (INDUCTANCE_MODE_PIN, INPUT_PULLUP);
+  pinMode (GAUSS_MODE_PIN, INPUT_PULLUP);
+  pinMode (ENABLE_SCATTER_PIN, INPUT_PULLUP);
+
   
   Serial.begin(9600);
   Serial.println("Ready");                               
@@ -547,15 +579,22 @@ void loop() {
   state.programmingMode = digitalRead(PROG_PIN);
   state.ohmMeterMode = digitalRead(OHM_MODE_PIN);
   state.inductanceMeterMode = digitalRead(INDUCTANCE_MODE_PIN);
+  state.gaussMeterMode = digitalRead(GAUSS_MODE_PIN);
 
   if (state.programmingMode == HIGH ) {
+    Serial.println("PMODE ON");
     programmingLoop(&state, &prevState);
-  }  else if (state.ohmMeterMode == HIGH) {
-      ohmMeterLoop(&state, &prevState);
+  }
+  else if (state.ohmMeterMode == HIGH) {
+    ohmMeterLoop(&state, &prevState);
   } else if (state.inductanceMeterMode == HIGH) {
-      inductanceMeterLoop(&state, &prevState);
-  } else {
+    inductanceMeterLoop(&state, &prevState);
+  } else if (state.gaussMeterMode == HIGH) {
+    gaussMeterLoop(&state, &prevState);
+  }
+  else {
+    Serial.println("PMODE OFF");
     spinLoop(&state, &prevState);
     resetState();
   }
-}
+}                                                                                                                                                                                                                                         
