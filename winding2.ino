@@ -300,7 +300,7 @@ void editWhenEditState(struct State *state) {
 
 void resetState() {
   state.maxRounds = 0;
-  state.dir = 0;
+  state.dir = CCW;
   state.maxRPM = 3000;
 }
 
@@ -323,10 +323,10 @@ void stateSummary(State *state) {
     lcd.setCursor(0,1);
     lcd.print("dir. :");
     lcd.setCursor(6,1);
-    if (state->dir == CW) {
-      lcd.print("cw ");
+    if (state->dir == CCW) {
+      lcd.print("ccw");
     } else {
-      lcd.print("ccw ");
+      lcd.print("cw ");
     }
 
     lcd.setCursor(0,3);
