@@ -464,7 +464,7 @@ void inductanceMeterLoop(struct State *state, struct State* prevState) {
 
 
 void gaussMeterLoop(struct State*state, struct State* prevState) {
-  if (prevState->gaussMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH || state->ohmMeterMode == HIGH) {
+  if (prevState->gaussMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH || prevState->ohmMeterMode == HIGH) {
     lcd.clear(); 
     gaussMeterScreen();
   }  
