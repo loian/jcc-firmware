@@ -12,11 +12,20 @@ const int PROG_PIN = 30;
 const int OHM_MODE_PIN = 31;
 const int INDUCTANCE_MODE_PIN = 32;
 const int GAUSS_MODE_PIN = 33;
+const int GAUSS_VALUE_PIN = A1;
 const int ENABLE_SCATTER_PIN = 34;
 const int OHM_VALUE_PIN = 0;
 const int OPTICAL_SENSOR = 3;
 const int SCATTER_PIN = 8;
 
+const int MOTOR_ENABLE = 13;
+const int MOTOR_IN1 = 36;
+const int MOTOR_IN2 = 37;
+const int MOTOR_POT = A2;
+
+#define NOFIELD 505L    // Analog output with no applied field, calibrate this
+#define TOMILLIGAUSS 3756L  // For A1302: 1.3mV = 1Gauss, and 1024 analog steps = 5V, so 1 step = 3756mG
+ 
 /****************************
  * OHM METER
  */
@@ -25,6 +34,7 @@ const int RESISTANCE = 9970;
 const long unsigned MIN_OHM = 500;
 const long unsigned MAX_OHM = 50000;
 const int VIN = 5;
+
 
 
 
@@ -258,7 +268,7 @@ void goToProgramScreen() {
   lcd.setCursor(0,2);
   lcd.print("program mode and set");
   lcd.setCursor(0,3);
-  lcd.print("turns and max rpm.");
+  lcd.print("turns and max rpm.  ");
 }
 
 void splashScreen() {
@@ -345,7 +355,7 @@ void ohmMeterScreen() {
 
 void gaussMeterScreen() {
    lcd.setCursor(6,1);
-   lcd.print (" 00.0 G     ");
+   lcd.print ("    0 G     ");
 }
 
 void inductanceMeterScreen() {
@@ -404,6 +414,29 @@ void countIstogram(int count, long maxRounds) {
     }
 }
 
+void spinMotor(struct State *state) {
+
+  Serial.println("SPIN COMMAND");  
+  
+  if (state->dir = CW) {
+    digitalWrite(MOTOR_IN1, LOW);
+    digitalWrite(MOTOR_IN2, HIGH);
+  } else {
+    digitalWrite(MOTOR_IN1, HIGH);
+    digitalWrite(MOTOR_IN2, LOW);    
+  }
+
+
+  int speed = analogRead(MOTOR_POT);
+  speed = speed * state->maxRPM / 3000;
+  speed = speed * 0.3;
+  if (speed>255) speed = 255;
+  Serial.print("SPEED: ");Serial.println(speed);
+  analogWrite(MOTOR_ENABLE, speed);
+  
+  
+}
+
 void countLoop(struct State *state) {
   
   int prev = LOW;
@@ -420,12 +453,14 @@ void countLoop(struct State *state) {
   while (key!='A' && key!='D') {
     key = keypad.getKey();
     if(key=='D') {
+      analogWrite(MOTOR_ENABLE, 0);
       return;
     }
   }
 
   while (key != 'D') {
     scatter(state);  
+    spinMotor(state);
     read = digitalRead(OPTICAL_SENSOR);
     
     key = keypad.getKey();
@@ -448,6 +483,7 @@ void countLoop(struct State *state) {
     }
     prev = read;
   }
+  analogWrite(MOTOR_ENABLE, 0);
   scatterMotor.detach(); // start servo control  
 }
 
@@ -468,10 +504,35 @@ void gaussMeterLoop(struct State*state, struct State* prevState) {
     lcd.clear(); 
     gaussMeterScreen();
   }  
+
+  unsigned long ts = millis();
+  
   while (state->gaussMeterMode == HIGH) {
     state->gaussMeterMode = digitalRead(GAUSS_MODE_PIN);
+    unsigned long now = millis();
+    if (now-ts >= 1000) {
+        ts = now;
+        // measure magnetic field
+        int raw = analogRead(GAUSS_VALUE_PIN);
+    
+        long compensated = raw - NOFIELD;                 // adjust relative to no applied field
+        long gauss = compensated * TOMILLIGAUSS / 1000;   // adjust scale to Gauss
+
+
+        lcd.setCursor(6,1);
+        lcd.print(gauss);
+        lcd.print(" G");
+        
+        if (gauss > 0)     lcd.print(" South   ");
+        else if(gauss < 0) lcd.print(" North   ");
+        else               lcd.print("        ");
+    }
   }
 }
+
+
+    
+
 
 void ohmMeterLoop(struct State*state, struct State* prevState) {
   if (prevState->ohmMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH || prevState->gaussMeterMode == HIGH) {
@@ -554,7 +615,9 @@ void setup() {
   pinMode (INDUCTANCE_MODE_PIN, INPUT_PULLUP);
   pinMode (GAUSS_MODE_PIN, INPUT_PULLUP);
   pinMode (ENABLE_SCATTER_PIN, INPUT_PULLUP);
-
+  pinMode (MOTOR_IN1, OUTPUT);
+  pinMode (MOTOR_IN2, OUTPUT); 
+  pinMode (MOTOR_ENABLE, OUTPUT);
   
   Serial.begin(9600);
   Serial.println("Ready");                               
