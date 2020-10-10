@@ -19,8 +19,8 @@ const int OPTICAL_SENSOR = 3;
 const int SCATTER_PIN = 8;
 
 const int MOTOR_ENABLE = 13;
-const int MOTOR_IN1 = 36;
-const int MOTOR_IN2 = 37;
+const int MOTOR_IN1 = 40;
+const int MOTOR_IN2 = 41;
 const int MOTOR_POT = A2;
 
 #define NOFIELD 505L    // Analog output with no applied field, calibrate this
@@ -414,11 +414,22 @@ void countIstogram(int count, long maxRounds) {
     }
 }
 
-void spinMotor(struct State *state) {
-
-  Serial.println("SPIN COMMAND");  
+int rampUpSpeed(unsigned long intialMillis, int speed) {
+  Serial.print ("initialMillis: "); Serial.println(intialMillis);
+  unsigned long ts = millis();
+  //after 25 secons the motor is at full speed
+  //with a speed lower than 40 the motor does not spin.
+  unsigned long rampSpeed = ((ts-intialMillis) / 100) + 40;
   
-  if (state->dir = CW) {
+  if (rampSpeed > speed) {
+    return speed;
+  }
+  return (int)rampSpeed;
+}
+
+
+void spinMotor(struct State *state, unsigned long initialMillis) {
+    if (state->dir == CW) {
     digitalWrite(MOTOR_IN1, LOW);
     digitalWrite(MOTOR_IN2, HIGH);
   } else {
@@ -430,11 +441,9 @@ void spinMotor(struct State *state) {
   int speed = analogRead(MOTOR_POT);
   speed = speed * state->maxRPM / 3000;
   speed = speed * 0.3;
+  speed = rampUpSpeed(initialMillis, speed);
   if (speed>255) speed = 255;
-  Serial.print("SPEED: ");Serial.println(speed);
-  analogWrite(MOTOR_ENABLE, speed);
-  
-  
+  analogWrite(MOTOR_ENABLE, speed );
 }
 
 void countLoop(struct State *state) {
@@ -445,6 +454,7 @@ void countLoop(struct State *state) {
   char key = 'x';
   
   scatterMotor.attach(SCATTER_PIN); // start servo control
+  unsigned long initialMillis = millis();
 
   countLoopContextMenu();
   countLoopScreen(0,state->maxRounds);
@@ -460,7 +470,7 @@ void countLoop(struct State *state) {
 
   while (key != 'D') {
     scatter(state);  
-    spinMotor(state);
+    spinMotor(state, initialMillis);
     read = digitalRead(OPTICAL_SENSOR);
     
     key = keypad.getKey();
@@ -529,10 +539,6 @@ void gaussMeterLoop(struct State*state, struct State* prevState) {
     }
   }
 }
-
-
-    
-
 
 void ohmMeterLoop(struct State*state, struct State* prevState) {
   if (prevState->ohmMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH || prevState->gaussMeterMode == HIGH) {
@@ -650,7 +656,6 @@ void loop() {
   state.gaussMeterMode = digitalRead(GAUSS_MODE_PIN);
 
   if (state.programmingMode == HIGH ) {
-    Serial.println("PMODE ON");
     programmingLoop(&state, &prevState);
   }
   else if (state.ohmMeterMode == HIGH) {
@@ -661,7 +666,6 @@ void loop() {
     gaussMeterLoop(&state, &prevState);
   }
   else {
-    Serial.println("PMODE OFF");
     spinLoop(&state, &prevState);
     resetState();
   }
