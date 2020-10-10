@@ -15,7 +15,7 @@ const int GAUSS_MODE_PIN = 33;
 const int GAUSS_VALUE_PIN = A1;
 const int ENABLE_SCATTER_PIN = 34;
 const int OHM_VALUE_PIN = 0;
-const int OPTICAL_SENSOR = 3;
+const int OPTICAL_SENSOR = 42;
 const int SCATTER_PIN = 8;
 
 const int MOTOR_ENABLE = 13;
@@ -129,8 +129,7 @@ struct State {
 
   unsigned long prevScatterTs = 0;
   int scatterPos = 0;
-  int scatterEnabled = HIGH;
-  
+  int scatterEnabled = HIGH;  
 };
 
 struct State state;
@@ -282,7 +281,7 @@ void splashScreen() {
   lcd.setCursor(0, 3); // Set the cursor on the first column and first row.
   lcd.print("(c) Lorenzo Iannone"); // Print the string "Hello World!"
   
-  delay(3000);
+  delay(300);
   readyScreen();
 }
 
@@ -312,6 +311,9 @@ void resetState() {
   state.maxRounds = 0;
   state.dir = CCW;
   state.maxRPM = 3000;
+  state.rounds = 0;
+  state.prevScatterTs = 0;
+  state.scatterPos = 0;
 }
 
 void stateSummary(State *state) {
@@ -394,6 +396,7 @@ void spinLoop(struct State*state, struct State* prevState) {
 
 void countLoopScreen(int count, long maxRounds) {
     lcd.setCursor(8-(int)log10(count),1);
+    lcd.setCursor(6,1);
     lcd.print(count);
     lcd.print("/");
     lcd.print(maxRounds);
@@ -415,12 +418,8 @@ void countIstogram(int count, long maxRounds) {
 }
 
 int rampUpSpeed(unsigned long intialMillis, int speed) {
-  Serial.print ("initialMillis: "); Serial.println(intialMillis);
   unsigned long ts = millis();
-  //after 25 secons the motor is at full speed
-  //with a speed lower than 40 the motor does not spin.
-  unsigned long rampSpeed = ((ts-intialMillis) / 100) + 40;
-  
+  unsigned long rampSpeed = (ts-intialMillis) / 100;
   if (rampSpeed > speed) {
     return speed;
   }
@@ -437,20 +436,20 @@ void spinMotor(struct State *state, unsigned long initialMillis) {
     digitalWrite(MOTOR_IN2, LOW);    
   }
 
-
   int speed = analogRead(MOTOR_POT);
   speed = speed * state->maxRPM / 3000;
   speed = speed * 0.3;
   speed = rampUpSpeed(initialMillis, speed);
   if (speed>255) speed = 255;
   analogWrite(MOTOR_ENABLE, speed );
-}
+ }
 
 void countLoop(struct State *state) {
   
-  int prev = LOW;
-  int read = HIGH;
-  int count = -1;
+  int prevRead = HIGH; //prevOptState
+  int count = 0;
+  int upTransition = true;
+  int highCount = 0;
   char key = 'x';
   
   scatterMotor.attach(SCATTER_PIN); // start servo control
@@ -468,32 +467,55 @@ void countLoop(struct State *state) {
     }
   }
 
+  int total = 0;
+  int read = LOW;
+  unsigned long ts = millis();
   while (key != 'D') {
     scatter(state);  
     spinMotor(state, initialMillis);
     read = digitalRead(OPTICAL_SENSOR);
-    
     key = keypad.getKey();
     
-    if (read==HIGH && prev ==LOW) {
-      count++;
+    if (prevRead == LOW && read == HIGH) {
+        upTransition = true;
+    } else if (prevRead == HIGH && read == LOW){
+        upTransition = false;
+    } 
+    if (upTransition == true & read == HIGH) {
+        highCount++;
+        if (highCount>40) {
+          upTransition = false;
+          count++;
+        }
+    }
+      
+    prevRead = read;
+  
+    unsigned long curTs =  millis();
+    if (curTs - ts >100) {
       countLoopScreen(count, state->maxRounds);
+      countIstogram(count,state->maxRounds);
+      ts = curTs;
     }
     
-    countIstogram(count,state->maxRounds);
 
     if (count >= state->maxRounds) {
+      countLoopScreen(state->maxRounds, state->maxRounds);
       lcd.setCursor(4,2);
       lcd.print ("  complete  ");
+      analogWrite(MOTOR_ENABLE, 0);
+      resetState();
+      scatterMotor.detach(); // start servo control
       while (keypad.getKey() !='D') {
         //nop
       }
-      scatterMotor.detach(); // start servo control
       return;
     }
-    prev = read;
   }
+  
+ 
   analogWrite(MOTOR_ENABLE, 0);
+  resetState();
   scatterMotor.detach(); // start servo control  
 }
 
@@ -539,6 +561,10 @@ void gaussMeterLoop(struct State*state, struct State* prevState) {
     }
   }
 }
+
+
+    
+
 
 void ohmMeterLoop(struct State*state, struct State* prevState) {
   if (prevState->ohmMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH || prevState->gaussMeterMode == HIGH) {
