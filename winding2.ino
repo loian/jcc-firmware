@@ -461,8 +461,7 @@ void spinLoop(struct State*state, struct State* prevState) {
 }
 
 void countLoopScreen(int count, long maxRounds) {
-   lcd.setCursor(8-(int)log10(count),1);
-    lcd.setCursor(6,1);
+    lcd.setCursor(8-(int)log10(count),1);
     lcd.print(count);
     lcd.print("/");
     lcd.print(maxRounds);
