@@ -23,6 +23,9 @@ const int MOTOR_IN1 = 40;
 const int MOTOR_IN2 = 41;
 const int MOTOR_POT = A2;
 
+const int MANUAL = 0;
+const int AUTO = 1;
+
 #define NOFIELD 505L    // Analog output with no applied field, calibrate this
 #define TOMILLIGAUSS 3756L  // For A1302: 1.3mV = 1Gauss, and 1024 analog steps = 5V, so 1 step = 3756mG
  
@@ -67,6 +70,7 @@ const char IDLE_APP = '0';
 const char ROUNDS_EDIT = 'A';
 const char RPM_EDIT = 'B';
 const char DIR_EDIT = 'C';
+const char SCAT_EDIT = 'D';
 
 const char CW = 0;
 const char CCW = 1;
@@ -130,12 +134,13 @@ struct State {
   unsigned long prevScatterTs = 0;
   int scatterPos = 0;
   int scatterEnabled = HIGH;  
+  int scatter = AUTO;
 };
 
 struct State state;
 
 void switchState(char menuKey, struct State *state) {
-  if (menuKey == RPM_EDIT || menuKey == ROUNDS_EDIT || menuKey == DIR_EDIT) {
+  if (menuKey == RPM_EDIT || menuKey == ROUNDS_EDIT || menuKey == DIR_EDIT || menuKey == SCAT_EDIT) {
     state->currentState = menuKey;
   }
 }
@@ -146,12 +151,19 @@ void switchState(char menuKey, struct State *state) {
 
 void contextMenuDirection() {
   lcd.setCursor (0,2);
-  lcd.print ("1=ccw 2=cw");
+  lcd.print ("1=ccw 2=cw          ");
   lcd.setCursor(0,3);
   lcd.print ("#=confirm *=cancel  ");
 }
 
-void clearContextMenuDirection() {
+void contextMenuScatter() {
+  lcd.setCursor (0,2);
+  lcd.print ("1=auto 2=manual     ");
+  lcd.setCursor(0,3);
+  lcd.print ("#=confirm *=cancel  ");
+}
+
+void clearContextMenuDirectionScatter() {
   lcd.setCursor (0,2);
   lcd.print ("                    ");
   lcd.setCursor(0,3);
@@ -190,12 +202,49 @@ char inputDirection (char d, int col, int row) {
 
     if (key == '*') {
       lcd.noBlink();
-      clearContextMenuDirection();
+      clearContextMenuDirectionScatter();
       return d;
     }
   }
   lcd.noBlink();
-  clearContextMenuDirection();
+  clearContextMenuDirectionScatter();
+  return output;
+}
+
+
+char inputScatter (char d, int col, int row) {
+  char exit = '#';
+  char key = 'x';
+
+  bool set = false;
+  char output = d;
+
+  contextMenuScatter();
+
+  while (key!=exit) {
+    lcd.setCursor(col,row); 
+    lcd.blink();
+    key = keypad.getKey() ;
+      
+    if (key == '1') {
+      output = AUTO;
+      lcd.setCursor (col,row);
+      lcd.print("auto");
+    }
+    if (key == '2') {
+      output = MANUAL;
+      lcd.setCursor (col,row);
+      lcd.print("man ");
+    }
+
+    if (key == '*') {
+      lcd.noBlink();
+      clearContextMenuDirectionScatter();
+      return d;
+    }
+  }
+  lcd.noBlink();
+  clearContextMenuDirectionScatter();
   return output;
 }
 
@@ -306,6 +355,12 @@ void editWhenEditState(struct State *state) {
     state->currentState = IDLE_APP;
     stateSummary(state);
  }
+
+ if (state->currentState == SCAT_EDIT) {
+    state->scatter = inputScatter(state->scatter, 16,1);
+    state->currentState = IDLE_APP;
+    stateSummary(state);  
+ }
 }
 
 void resetState() {
@@ -340,6 +395,14 @@ void stateSummary(State *state) {
       lcd.print("ccw");
     } else {
       lcd.print("cw ");
+    }
+
+    lcd.setCursor(12,1);
+    lcd.print("sca:");
+    if (state->scatter == MANUAL) {
+      lcd.print("man ");
+    } else {
+      lcd.print("auto");
     }
 
     lcd.setCursor(0,2);
