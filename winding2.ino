@@ -16,7 +16,7 @@ const int GAUSS_VALUE_PIN = A1;
 const int ENABLE_SCATTER_PIN = 34;
 const int OHM_VALUE_PIN = 0;
 const int OPTICAL_SENSOR = 42;
-const int SCATTER_PIN = 8;
+const int SCATTER_PIN = 12;
 
 const int MOTOR_ENABLE = 13;
 const int MOTOR_IN1 = 40;
@@ -684,7 +684,9 @@ void ohmMeterLoop(struct State*state, struct State* prevState) {
 
 void scatter(struct State *state) {
   state->scatterEnabled = digitalRead(ENABLE_SCATTER_PIN);
-  if (state->scatterEnabled == HIGH) {   
+  if (state->scatterEnabled == HIGH) {
+    //TODO: save the state and do only once   
+    scatterMotor.attach(SCATTER_PIN);
     unsigned long curTime = millis();
     if (curTime - state->prevScatterTs > 350) {
       Serial.println("SCATTER");
@@ -697,6 +699,9 @@ void scatter(struct State *state) {
       }
       scatterMotor.write(state->scatterPos);
     }
+  } else {
+    //TODO: save the state and do only once
+    scatterMotor.detach(); // start servo control
   }
 }
 
