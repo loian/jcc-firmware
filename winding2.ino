@@ -281,8 +281,9 @@ void splashScreen() {
   lcd.setCursor(0, 3); // Set the cursor on the first column and first row.
   lcd.print("(c) Lorenzo Iannone"); // Print the string "Hello World!"
   
-  delay(300);
+  delay(2000);
   readyScreen();
+
 }
 
 
@@ -341,8 +342,10 @@ void stateSummary(State *state) {
       lcd.print("cw ");
     }
 
-    lcd.setCursor(0,3);
+    lcd.setCursor(0,2);
     lcd.print("A=turns B=rpm C=dir");
+    lcd.setCursor(0,3);
+    lcd.print("C=dir D=scatter");
 
   }
 }
@@ -395,7 +398,7 @@ void spinLoop(struct State*state, struct State* prevState) {
 }
 
 void countLoopScreen(int count, long maxRounds) {
-    lcd.setCursor(8-(int)log10(count),1);
+   lcd.setCursor(8-(int)log10(count),1);
     lcd.setCursor(6,1);
     lcd.print(count);
     lcd.print("/");
@@ -403,11 +406,10 @@ void countLoopScreen(int count, long maxRounds) {
     lcd.print("     ");
 }
 void countIstogram(int count, long maxRounds) {
-    int on;
-    on = 12 * count / maxRounds;
-    int off;
+    long  on;
+    on = 12 * (long)count / maxRounds;
+    long  off;
     off = 12 - on;
-    
     lcd.setCursor(4,2);
     for (int x=0; x<on; x++) {
       lcd.write(ISTO_ON_CHAR);  
