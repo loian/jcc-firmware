@@ -404,7 +404,7 @@ void scatterMenuScreen(struct State *state, struct State *prevState) {
     }
 
     lcd.setCursor(0,0);
-    lcd.print("scat:");
+    lcd.print("trav:");
     if (state->scatter == MANUAL) {
       lcd.print("man ");
     } else {
@@ -509,7 +509,7 @@ void stateSummary(State *state) {
     lcd.setCursor(0,2);
     lcd.print("A=turns B=rpm C=dir");
     lcd.setCursor(0,3);
-    lcd.print("C=dir D=scatter");
+    lcd.print("C=dir D=traverse");
 
   }
 }
@@ -790,7 +790,6 @@ void scatter(struct State *state) {
     scatterMotor.attach(SCATTER_PIN);
     unsigned long curTime = millis();
     if (curTime - state->prevScatterTs > 350) {
-      Serial.println("SCATTER");
       state->prevScatterTs = curTime;
 
       if (state->scatterPos == 0) {
