@@ -27,6 +27,8 @@ const int MOTOR_POT = A2;
 const int MANUAL = 0;
 const int AUTO = 1;
 
+const int SERVO_SPEED = 12; //0.12 Sec/60 Degrees, type 12
+
 #define LEFT  0
 #define RIGHT  1
 
@@ -141,6 +143,7 @@ struct State {
   int scatter = AUTO;
   int leftLimit = 0;
   int rightLimit = 180;
+  bool scatterAttached = false;
 };
 
 struct State state;
@@ -425,7 +428,7 @@ void scatterMenuScreen(struct State *state, struct State *prevState) {
     lcd.setCursor(0,2);
     lcd.print("A=type B=lt C=rt    ");
     lcd.setCursor(0,3);
-    lcd.print("D=exit");
+    lcd.print("D=exit 0=center");
 }
 
 void scatterMenuLoop(struct State *state, struct State *prevState) {
@@ -439,14 +442,19 @@ void scatterMenuLoop(struct State *state, struct State *prevState) {
       int pos = inputPosition(0,LEFT) ;
       state->leftLimit = pos;
       EEPROM.write(LEFT, pos);
-      Serial.println("eprom left");
     }
     if (key=='C') {
       int pos = inputPosition(0,RIGHT) ;
       state->rightLimit = pos;
       EEPROM.write(RIGHT, pos);
     }
+
+    if (key=='0') {
+      scatterMotor.attach(SCATTER_PIN);
+      scatterMotor.write(90);
+    }
   }
+  scatterMotor.detach();
   lcd.clear();
 }
 
@@ -792,23 +800,31 @@ void ohmMeterLoop(struct State*state, struct State* prevState) {
 }
 
 void scatter(struct State *state) {
+
+  //calculate the waiting interval, the motor does 
+  float interval = (float)(state->rightLimit - state->leftLimit)/6* (SERVO_SPEED + 2); //5 is a bit of margin to cover motors inaccuracy
+  
   state->scatterEnabled = digitalRead(ENABLE_SCATTER_PIN);
   if (state->scatterEnabled == HIGH) {
-    //TODO: save the state and do only once   
-    scatterMotor.attach(SCATTER_PIN);
+    if (state->scatterAttached == false) {
+      scatterMotor.attach(SCATTER_PIN);
+      state->scatterAttached = true;
+    }
     unsigned long curTime = millis();
-    if (curTime - state->prevScatterTs > 350) {
+    if (curTime - state->prevScatterTs > interval) {
       state->prevScatterTs = curTime;
-
       if (state->scatterPos == 0) {
         state->scatterPos = 180;
+        scatterMotor.write(180-state->rightLimit);
       } else {   
         state->scatterPos = 0;
+        scatterMotor.write(180-state->leftLimit);
       }
-      scatterMotor.write(state->scatterPos);
+      
     }
   } else {
     //TODO: save the state and do only once
+    state->scatterAttached = false;
     scatterMotor.detach(); // start servo control
   }
 }
@@ -843,8 +859,6 @@ void setup() {
   lcd.createChar(ISTO_ON_CHAR, istoOnChar);
 
   state.leftLimit = EEPROM.read(LEFT);
-  Serial.println (state.leftLimit);
-  Serial.println("eprom read left");
   if (state.leftLimit > 90) {
     state.leftLimit = 0;
   } 
