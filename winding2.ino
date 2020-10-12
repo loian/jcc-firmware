@@ -1,6 +1,7 @@
 #include <LiquidCrystal_I2C.h> // Library for LCD
 #include <Servo.h>
 #include <Keypad.h>
+#include <EEPROM.h>
 
 
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4); // Change to (0x27,16,2) for 16x2 LCD.
@@ -25,6 +26,9 @@ const int MOTOR_POT = A2;
 
 const int MANUAL = 0;
 const int AUTO = 1;
+
+#define LEFT  0
+#define RIGHT  1
 
 #define NOFIELD 505L    // Analog output with no applied field, calibrate this
 #define TOMILLIGAUSS 3756L  // For A1302: 1.3mV = 1Gauss, and 1024 analog steps = 5V, so 1 step = 3756mG
@@ -70,7 +74,7 @@ const char IDLE_APP = '0';
 const char ROUNDS_EDIT = 'A';
 const char RPM_EDIT = 'B';
 const char DIR_EDIT = 'C';
-const char SCAT_EDIT = 'D';
+const char SCAT_MENU = 'D';
 
 const char CW = 0;
 const char CCW = 1;
@@ -135,12 +139,14 @@ struct State {
   int scatterPos = 0;
   int scatterEnabled = HIGH;  
   int scatter = AUTO;
+  int leftLimit = 0;
+  int rightLimit = 180;
 };
 
 struct State state;
 
 void switchState(char menuKey, struct State *state) {
-  if (menuKey == RPM_EDIT || menuKey == ROUNDS_EDIT || menuKey == DIR_EDIT || menuKey == SCAT_EDIT) {
+  if (menuKey == RPM_EDIT || menuKey == ROUNDS_EDIT || menuKey == DIR_EDIT || menuKey == SCAT_MENU) {
     state->currentState = menuKey;
   }
 }
@@ -259,6 +265,63 @@ void clearContextMenuNumber() {
 }
 
 
+void updatePosition(int position, int edge) {
+  if (edge == LEFT) {
+    lcd.setCursor(0,1);
+    lcd.print("left:");
+    lcd.setCursor(5,1);
+    lcd.print((int)position);
+  } else {
+    lcd.setCursor(10,1);
+    lcd.print("right:");
+    lcd.setCursor(16,1);
+    lcd.print((int)position);
+  }
+  lcd.print(" ");
+}
+
+
+
+
+int inputPosition(int def, int edge)  {
+  
+  scatterMotor.attach(SCATTER_PIN);
+  unsigned long curTs = millis();
+  unsigned long ts = curTs;
+  char key = 'X';
+  int val = def;
+  int position = 0;
+  while (key!='*' && key!='#') {
+    key = keypad.getKey();
+    
+    curTs = millis();
+    if (curTs - ts >100) {
+      val = analogRead(MOTOR_POT);
+      int normalisedVal = min(val,1000);
+      normalisedVal = max(24,normalisedVal);
+      if (edge == LEFT) {
+        lcd.blink();
+        position = ((float)normalisedVal-24)/(1000-24)*90;
+        updatePosition(position, LEFT);
+        lcd.setCursor(5,1);
+        EEPROM.write(position,LEFT);
+      } else {
+        lcd.blink();
+        position = 90 + ((float)normalisedVal-24)/(1000-24)*90;
+        updatePosition(position, RIGHT);
+        lcd.setCursor(16,1);
+        EEPROM.write(position,RIGHT);
+      }
+      scatterMotor.write(180-position);
+      ts = curTs;    
+    }
+  }
+  scatterMotor.detach();
+  lcd.noBlink();
+  if (key == '*') return def;
+  return position;
+}
+
 long inputNumberB(long d, int col, int row, int maxDigits) {
   long number = 0;
   char exit = '#';
@@ -275,7 +338,6 @@ long inputNumberB(long d, int col, int row, int maxDigits) {
     if ((key == '1' || key == '2' || key == '3' || key == '4' || key == '5' || key == '6' || key == '7' || key == '8' || key == '9' || key == '0')) {
       if (digits < maxDigits) {
         number = (number * 10 + ((long) key - 48));
-        Serial.println(number);
         digits++;
       }
 
@@ -335,8 +397,53 @@ void splashScreen() {
 
 }
 
+void scatterMenuScreen(struct State *state, struct State *prevState) {
 
-void editWhenEditState(struct State *state) {
+    if (prevState->currentState != SCAT_MENU) {
+      lcd.clear();
+    }
+
+    lcd.setCursor(0,0);
+    lcd.print("scat:");
+    if (state->scatter == MANUAL) {
+      lcd.print("man ");
+    } else {
+      lcd.print("auto");
+    }
+
+    lcd.setCursor(0,1);
+    lcd.print("left:");
+    lcd.setCursor(5,1);
+    lcd.print(state->leftLimit);
+    lcd.print("  ");
+    
+    lcd.setCursor(10,1);
+    lcd.print("right:");
+    lcd.setCursor(16,1);
+    lcd.print(state->rightLimit);
+    lcd.print("  ");
+    
+    lcd.setCursor(0,2);
+    lcd.print("A=type B=lt C=rt    ");
+    lcd.setCursor(0,3);
+    lcd.print("D=exit");
+}
+
+void scatterMenuLoop(struct State *state, struct State *prevState) {
+  scatterMenuScreen(state, prevState);  
+  char key = 'x';
+  while (key !='D' && state->programmingMode == HIGH) {
+    state->programmingMode = digitalRead(PROG_PIN);
+    key = keypad.getKey();
+
+    if (key=='B') inputPosition(0,LEFT);  
+    if (key=='C') inputPosition(0,RIGHT);  
+  }
+  lcd.clear();
+}
+
+  
+void editWhenEditState(struct State *state, struct State *prevState) {
   if (state->currentState == ROUNDS_EDIT) {
       state->maxRounds = inputNumberB(state->maxRounds, 6,0,5);
       state->currentState = IDLE_APP;
@@ -356,12 +463,14 @@ void editWhenEditState(struct State *state) {
     stateSummary(state);
  }
 
- if (state->currentState == SCAT_EDIT) {
-    state->scatter = inputScatter(state->scatter, 16,1);
-    state->currentState = IDLE_APP;
+ if (state->currentState == SCAT_MENU) {
+    scatterMenuLoop(state, prevState);
     stateSummary(state);  
+    state->currentState = IDLE_APP;
  }
 }
+
+
 
 void resetState() {
   state.maxRounds = 0;
@@ -397,14 +506,6 @@ void stateSummary(State *state) {
       lcd.print("cw ");
     }
 
-    lcd.setCursor(12,1);
-    lcd.print("sca:");
-    if (state->scatter == MANUAL) {
-      lcd.print("man ");
-    } else {
-      lcd.print("auto");
-    }
-
     lcd.setCursor(0,2);
     lcd.print("A=turns B=rpm C=dir");
     lcd.setCursor(0,3);
@@ -435,7 +536,7 @@ void inductanceMeterScreen() {
 void programmingLoop(struct State*state, struct State* prevState) {
 
     //if there is a transition in the programming mode pin then clear the screen to display the new state
-    if (prevState->programmingMode == LOW) {
+    if (prevState->programmingMode == LOW || prevState == SCAT_MENU) {
       lcd.clear();
       stateSummary(state);
     }
@@ -443,7 +544,7 @@ void programmingLoop(struct State*state, struct State* prevState) {
     char key = keypad.getKey();
 
     switchState(key, state);
-    editWhenEditState(state);  
+    editWhenEditState(state, prevState);  
 }
 
 void spinLoop(struct State*state, struct State* prevState) {
@@ -734,7 +835,14 @@ void setup() {
   lcd.createChar(ISTO_OFF_CHAR, istoOffChar);
   lcd.createChar(ISTO_ON_CHAR, istoOnChar);
 
-  
+  state.leftLimit = EEPROM.read(LEFT);
+  if (state.leftLimit > 90) {
+    state.leftLimit = 0;
+  } 
+  state.rightLimit = EEPROM.read(RIGHT);
+  if (state.rightLimit < 90 || state.rightLimit > 180) {
+    state.rightLimit = 180;
+  }
   lcd.backlight();
   splashScreen();
   lcd.clear();
