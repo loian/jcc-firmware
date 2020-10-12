@@ -14,7 +14,7 @@ const int OHM_MODE_PIN = 31;
 const int INDUCTANCE_MODE_PIN = 32;
 const int GAUSS_MODE_PIN = 33;
 const int GAUSS_VALUE_PIN = A1;
-const int ENABLE_SCATTER_PIN = 34;
+ const int ENABLE_SCATTER_PIN = 34;                          
 const int OHM_VALUE_PIN = 0;
 const int OPTICAL_SENSOR = 42;
 const int SCATTER_PIN = 12;
@@ -304,18 +304,17 @@ int inputPosition(int def, int edge)  {
         position = ((float)normalisedVal-24)/(1000-24)*90;
         updatePosition(position, LEFT);
         lcd.setCursor(5,1);
-        EEPROM.write(position,LEFT);
       } else {
         lcd.blink();
         position = 90 + ((float)normalisedVal-24)/(1000-24)*90;
         updatePosition(position, RIGHT);
-        lcd.setCursor(16,1);
-        EEPROM.write(position,RIGHT);
+        lcd.setCursor(16,1);     
       }
       scatterMotor.write(180-position);
       ts = curTs;    
     }
   }
+
   scatterMotor.detach();
   lcd.noBlink();
   if (key == '*') return def;
@@ -436,8 +435,17 @@ void scatterMenuLoop(struct State *state, struct State *prevState) {
     state->programmingMode = digitalRead(PROG_PIN);
     key = keypad.getKey();
 
-    if (key=='B') inputPosition(0,LEFT);  
-    if (key=='C') inputPosition(0,RIGHT);  
+    if (key=='B') { 
+      int pos = inputPosition(0,LEFT) ;
+      state->leftLimit = pos;
+      EEPROM.write(LEFT, pos);
+      Serial.println("eprom left");
+    }
+    if (key=='C') {
+      int pos = inputPosition(0,RIGHT) ;
+      state->rightLimit = pos;
+      EEPROM.write(RIGHT, pos);
+    }
   }
   lcd.clear();
 }
@@ -835,6 +843,8 @@ void setup() {
   lcd.createChar(ISTO_ON_CHAR, istoOnChar);
 
   state.leftLimit = EEPROM.read(LEFT);
+  Serial.println (state.leftLimit);
+  Serial.println("eprom read left");
   if (state.leftLimit > 90) {
     state.leftLimit = 0;
   } 
