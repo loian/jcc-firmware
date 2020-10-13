@@ -11,13 +11,13 @@ LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4); // Change to (0x27,16,2)
  *****************************/
 const int PROG_PIN = 30;
 const int OHM_MODE_PIN = 31;
-const int INDUCTANCE_MODE_PIN = 32;
-const int GAUSS_MODE_PIN = 33;
+const int GAUSS_MODE_PIN = 32;
 const int GAUSS_VALUE_PIN = A1;
 const int ENABLE_SCATTER_PIN = 34;                          
 const int OHM_VALUE_PIN = 0;
 const int OPTICAL_SENSOR = 42;
 const int SCATTER_PIN = 12;
+const int PAUSE_PIN = 33;
 const int MAXRPM = 2000;
 
 const int MOTOR_ENABLE = 13;
@@ -146,7 +146,7 @@ struct State {
   char currentState = IDLE_APP;
   int programmingMode = LOW;
   int ohmMeterMode = LOW;
-  int inductanceMeterMode = LOW;
+//  int inductanceMeterMode = LOW;
   int gaussMeterMode = LOW;
   bool boot = true;
 
@@ -586,11 +586,11 @@ void gaussMeterScreen() {
    lcd.print ("    0 G     ");
 }
 
-void inductanceMeterScreen() {
-   lcd.setCursor(6,1);
-   lcd.print (" 0.00 H");
-   lcd.print("       ");
-}
+//void inductanceMeterScreen() {
+//   lcd.setCursor(6,1);
+//   lcd.print (" 0.00 H");
+//   lcd.print("       ");
+//}
 
 void programmingLoop(struct State*state, struct State* prevState) {
 
@@ -652,20 +652,24 @@ int rampUpSpeed(unsigned long intialMillis, int speed) {
 
 
 void spinMotor(struct State *state, unsigned long initialMillis) {
+  if (digitalRead(PAUSE_PIN) == LOW) {
     if (state->dir == CW) {
-    digitalWrite(MOTOR_IN1, LOW);
-    digitalWrite(MOTOR_IN2, HIGH);
+      digitalWrite(MOTOR_IN1, LOW);
+      digitalWrite(MOTOR_IN2, HIGH);
+    } else {
+      digitalWrite(MOTOR_IN1, HIGH);
+      digitalWrite(MOTOR_IN2, LOW);    
+    }
+  
+    int speed = analogRead(MOTOR_POT);
+    speed = speed * state->maxRPM / MAXRPM;
+    speed = speed * 0.3;
+    speed = rampUpSpeed(initialMillis, speed);
+    if (speed>255) speed = 255;
+    analogWrite(MOTOR_ENABLE, speed );
   } else {
-    digitalWrite(MOTOR_IN1, HIGH);
-    digitalWrite(MOTOR_IN2, LOW);    
+    analogWrite(MOTOR_ENABLE, 0 );
   }
-
-  int speed = analogRead(MOTOR_POT);
-  speed = speed * state->maxRPM / MAXRPM;
-  speed = speed * 0.3;
-  speed = rampUpSpeed(initialMillis, speed);
-  if (speed>255) speed = 255;
-  analogWrite(MOTOR_ENABLE, speed );
  }
 
 void countLoop(struct State *state) {
@@ -743,20 +747,20 @@ void countLoop(struct State *state) {
   scatterMotor.detach(); // start servo control  
 }
 
-void inductanceMeterLoop(struct State *state, struct State* prevState) {
-  if (prevState->inductanceMeterMode == LOW || prevState->programmingMode == HIGH || prevState->ohmMeterMode == HIGH || prevState->gaussMeterMode == HIGH) {
-    lcd.clear(); 
-    inductanceMeterScreen(); 
-    }
- 
-    while (state->inductanceMeterMode == HIGH) {
-      state->inductanceMeterMode = digitalRead(INDUCTANCE_MODE_PIN);
-    }
-}
+//void inductanceMeterLoop(struct State *state, struct State* prevState) {
+//  if (prevState->inductanceMeterMode == LOW || prevState->programmingMode == HIGH || prevState->ohmMeterMode == HIGH || prevState->gaussMeterMode == HIGH) {
+//    lcd.clear(); 
+//    inductanceMeterScreen(); 
+//    }
+// 
+//    while (state->inductanceMeterMode == HIGH) {
+//      state->inductanceMeterMode = digitalRead(INDUCTANCE_MODE_PIN);
+//    }
+//}
 
 
 void gaussMeterLoop(struct State*state, struct State* prevState) {
-  if (prevState->gaussMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH || prevState->ohmMeterMode == HIGH) {
+  if (prevState->gaussMeterMode == LOW || prevState->programmingMode == HIGH || prevState->ohmMeterMode == HIGH) {
     lcd.clear(); 
     gaussMeterScreen();
   }  
@@ -787,7 +791,7 @@ void gaussMeterLoop(struct State*state, struct State* prevState) {
 }
 
 void ohmMeterLoop(struct State*state, struct State* prevState) {
-  if (prevState->ohmMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH || prevState->gaussMeterMode == HIGH) {
+  if (prevState->ohmMeterMode == LOW || prevState->programmingMode == HIGH || prevState->gaussMeterMode == HIGH) {
     lcd.clear(); 
     ohmMeterScreen();
   }
@@ -841,72 +845,50 @@ void ohmMeterLoop(struct State*state, struct State* prevState) {
 int nextStep = 0;
 int direction = 1;
 void scatter(struct State *state) {
-
-  //calculate the waiting interval, the motor does 
-  float interval = (float)(state->rightLimit - state->leftLimit)/6* (SERVO_SPEED + 2); //5 is a bit of margin to cover motors inaccuracy
+  if (digitalRead(PAUSE_PIN) == LOW)  {
+    //calculate the waiting interval, the motor does 
+    float interval = (float)(state->rightLimit - state->leftLimit)/6* (SERVO_SPEED + 2); //5 is a bit of margin to cover motors inaccuracy
+    
+    state->scatterEnabled = digitalRead(ENABLE_SCATTER_PIN);
+    if (state->scatterEnabled == HIGH) {
+      if (state->scatterAttached == false) {
+        scatterMotor.attach(SCATTER_PIN);
+        state->scatterAttached = true;
+      }
+      unsigned long curTime = millis();
+      int speed = 10;
   
-  state->scatterEnabled = digitalRead(ENABLE_SCATTER_PIN);
-  if (state->scatterEnabled == HIGH) {
-    if (state->scatterAttached == false) {
-      scatterMotor.attach(SCATTER_PIN);
-      state->scatterAttached = true;
-    }
-    unsigned long curTime = millis();
-    int speed = 10;
-
-    if (curTime - state->prevScatterTs > 40) {
-      if (state->scatterType == RANDOM) {
-        speed = random(state->scatterSpeed - 20, state->scatterSpeed + 20);
-      } else {
-        speed = state->scatterSpeed;
-      }
-      
-      state->prevScatterTs = curTime;
-      state->scatterPos = speed * direction + state->scatterPos;
-      
-      if (direction == 1) {        
-        if (state->scatterPos >= state->rightLimit) {
-          state->scatterPos = state->rightLimit;
-          direction = -1 * direction;
-        }     
-      } else {
-        if (state->scatterPos <= state->leftLimit) {
-          state->scatterPos = state->leftLimit;
-          direction = -1 * direction;
+      if (curTime - state->prevScatterTs > 40) {
+        if (state->scatterType == RANDOM) {
+          speed = random(state->scatterSpeed - 20, state->scatterSpeed + 20);
+        } else {
+          speed = state->scatterSpeed;
         }
+        
+        state->prevScatterTs = curTime;
+        state->scatterPos = speed * direction + state->scatterPos;
+        
+        if (direction == 1) {        
+          if (state->scatterPos >= state->rightLimit) {
+            state->scatterPos = state->rightLimit;
+            direction = -1 * direction;
+          }     
+        } else {
+          if (state->scatterPos <= state->leftLimit) {
+            state->scatterPos = state->leftLimit;
+            direction = -1 * direction;
+          }
+        }
+        
+        scatterMotor.write(180-state->scatterPos);
+  
       }
-      
-      scatterMotor.write(180-state->scatterPos);
-
-    }
-    
-    
-//    if (curTime - state->prevScatterTs > interval) {
-//      state->prevScatterTs = curTime;
-//      
-//      if (state->scatterType==RANDOM) {
-//        timeVariation = random(0,100);
-//        Serial.println (timeVariation);
-//      }
-//
-//
-//      if (state->scatterPos == 0) {
-//        state->scatterPos = 180;
-//        scatterMotor.write(180-state->rightLimit);
-//
-//        if (state->scatterType == RANDOM) {
-//          scatterMotor
-//        }
-//        
-//      } else {   
-//        state->scatterPos = 0;
-//        scatterMotor.write(180-state->leftLimit);
-//      }
-//    }
-  } else {
-    if (state->scatterAttached == true) {
-      state->scatterAttached = false;
-      scatterMotor.detach();
+  
+    } else {
+      if (state->scatterAttached == true) {
+        state->scatterAttached = false;
+        scatterMotor.detach();
+      }
     }
   }
 }
@@ -920,7 +902,7 @@ void setup() {
   pinMode (PROG_PIN, INPUT_PULLUP);
   pinMode (OHM_MODE_PIN, INPUT_PULLUP);
   pinMode (OPTICAL_SENSOR, INPUT_PULLUP);
-  pinMode (INDUCTANCE_MODE_PIN, INPUT_PULLUP);
+  pinMode (PAUSE_PIN, INPUT_PULLUP);
   pinMode (GAUSS_MODE_PIN, INPUT_PULLUP);
   pinMode (ENABLE_SCATTER_PIN, INPUT_PULLUP);
   pinMode (MOTOR_IN1, OUTPUT);
@@ -986,7 +968,6 @@ void loop() {
 
   state.programmingMode = digitalRead(PROG_PIN);
   state.ohmMeterMode = digitalRead(OHM_MODE_PIN);
-  state.inductanceMeterMode = digitalRead(INDUCTANCE_MODE_PIN);
   state.gaussMeterMode = digitalRead(GAUSS_MODE_PIN);
 
   if (state.programmingMode == HIGH ) {
@@ -994,8 +975,6 @@ void loop() {
   }
   else if (state.ohmMeterMode == HIGH) {
     ohmMeterLoop(&state, &prevState);
-  } else if (state.inductanceMeterMode == HIGH) {
-    inductanceMeterLoop(&state, &prevState);
   } else if (state.gaussMeterMode == HIGH) {
     gaussMeterLoop(&state, &prevState);
   }
