@@ -401,7 +401,7 @@ void splashScreen() {
   lcd.setCursor(0, 0); // Set the cursor on the first column and first row.
   lcd.print("JCC Winding Machine"); // Print the string "Hello World!"
   lcd.setCursor(4, 1); // Set the cursor on the first column and first row.
-  lcd.print("version 0.1"); // Print the string "Hello World!"
+  lcd.print("version 1.0"); // Print the string "Hello World!"
   lcd.setCursor(3, 2); // Set the cursor on the first column and first row.
   lcd.print("-------------"); // Print the string "Hello World!"
 
