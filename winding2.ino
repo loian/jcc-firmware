@@ -566,7 +566,7 @@ void stateSummary(State *state) {
     }
 
     lcd.setCursor(0,2);
-    lcd.print("A=turns B=rpm C=dir");
+    lcd.print("A=turns B=rpm");
     lcd.setCursor(0,3);
     lcd.print("C=dir D=traverse");
 
