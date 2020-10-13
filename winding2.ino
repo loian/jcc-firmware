@@ -507,10 +507,7 @@ void editWhenEditState(struct State *state, struct State *prevState) {
  if (state->currentState == RPM_EDIT) {
     state->maxRPM = inputNumberB(state->maxRPM, 16,0,4);
     int rpmH = state->maxRPM/100;
-    int rpmL = state->maxRPM - rpmH*100;
-    Serial.println (rpmH);
-    Serial.println (rpmL);
-    
+    int rpmL = state->maxRPM - rpmH*100;   
     EEPROM.write(RPM_H,rpmH);
     EEPROM.write(RPM_L,rpmL);
     state->currentState = IDLE_APP;
