@@ -24,16 +24,17 @@ const int MOTOR_IN1 = 40;
 const int MOTOR_IN2 = 41;
 const int MOTOR_POT = A2;
 
-const int MANUAL = 0;
-const int AUTO = 1;
+const int RANDOM = 0;
+const int UNIFORM = 1;
 
 const int SERVO_SPEED = 12; //0.12 Sec/60 Degrees, type 12
 
 #define LEFT  0
 #define RIGHT  1
+#define TYPE 2
 
 #define NOFIELD 505L    // Analog output with no applied field, calibrate this
-#define TOMILLIGAUSS 3756L  // For A1302: 1.3mV = 1Gauss, and 1024 analog steps = 5V, so 1 step = 3756mG
+#define TOMILLIGAUSS 3756L  // A1302: 1.3mV=1Gaus, and 1024 analog steps = 5V, so 1 step = 3756mG
  
 /****************************
  * OHM METER
@@ -140,7 +141,8 @@ struct State {
   unsigned long prevScatterTs = 0;
   int scatterPos = 0;
   int scatterEnabled = HIGH;  
-  int scatter = AUTO;
+  int scatterType = UNIFORM;
+  int scatterSpeed = 30;
   int leftLimit = 0;
   int rightLimit = 180;
   bool scatterAttached = false;
@@ -167,7 +169,7 @@ void contextMenuDirection() {
 
 void contextMenuScatter() {
   lcd.setCursor (0,2);
-  lcd.print ("1=auto 2=manual     ");
+  lcd.print ("1=uniform 2=random  ");
   lcd.setCursor(0,3);
   lcd.print ("#=confirm *=cancel  ");
 }
@@ -221,12 +223,12 @@ char inputDirection (char d, int col, int row) {
 }
 
 
-char inputScatter (char d, int col, int row) {
+int inputScatter (int d, int col, int row) {
   char exit = '#';
   char key = 'x';
 
   bool set = false;
-  char output = d;
+  int output = d;
 
   contextMenuScatter();
 
@@ -236,14 +238,14 @@ char inputScatter (char d, int col, int row) {
     key = keypad.getKey() ;
       
     if (key == '1') {
-      output = AUTO;
+      output = UNIFORM;
       lcd.setCursor (col,row);
-      lcd.print("auto");
+      lcd.print("uni ");
     }
     if (key == '2') {
-      output = MANUAL;
+      output = RANDOM;
       lcd.setCursor (col,row);
-      lcd.print("man ");
+      lcd.print("rand");
     }
 
     if (key == '*') {
@@ -406,11 +408,11 @@ void scatterMenuScreen(struct State *state, struct State *prevState) {
     }
 
     lcd.setCursor(0,0);
-    lcd.print("trav:");
-    if (state->scatter == MANUAL) {
-      lcd.print("man ");
+    lcd.print("type:");
+    if (state->scatterType == RANDOM) {
+      lcd.print("rand ");
     } else {
-      lcd.print("auto");
+      lcd.print("unif ");
     }
 
     lcd.setCursor(0,1);
@@ -437,21 +439,28 @@ void scatterMenuLoop(struct State *state, struct State *prevState) {
   while (key !='D' && state->programmingMode == HIGH) {
     state->programmingMode = digitalRead(PROG_PIN);
     key = keypad.getKey();
-
-    if (key=='B') { 
-      int pos = inputPosition(0,LEFT) ;
-      state->leftLimit = pos;
-      EEPROM.write(LEFT, pos);
-    }
-    if (key=='C') {
-      int pos = inputPosition(0,RIGHT) ;
-      state->rightLimit = pos;
-      EEPROM.write(RIGHT, pos);
-    }
-
-    if (key=='0') {
-      scatterMotor.attach(SCATTER_PIN);
-      scatterMotor.write(90);
+    int pos = 0;
+    
+    switch(key){
+      case 'A':
+        state->scatterType = inputScatter(state->scatterType, 5,0);
+        scatterMenuScreen(state, prevState);  
+        EEPROM.write(TYPE, state->scatterType);
+        break;
+      case 'B':
+        pos = inputPosition(0,LEFT) ;
+        state->leftLimit = pos;
+        EEPROM.write(LEFT, pos);
+        break;
+      case 'C':
+        pos = inputPosition(0,RIGHT) ;
+        state->rightLimit = pos;
+        EEPROM.write(RIGHT, pos);
+        break;
+      case '0':
+        scatterMotor.attach(SCATTER_PIN);
+        scatterMotor.write(90);
+        break;
     }
   }
   scatterMotor.detach();
@@ -728,8 +737,8 @@ void gaussMeterLoop(struct State*state, struct State* prevState) {
         // measure magnetic field
         int raw = analogRead(GAUSS_VALUE_PIN);
     
-        long compensated = raw - NOFIELD;                 // adjust relative to no applied field
-        long gauss = compensated * TOMILLIGAUSS / 1000;   // adjust scale to Gauss
+        long compensated = raw - NOFIELD;                 
+        long gauss = compensated * TOMILLIGAUSS / 1000;   
 
 
         lcd.setCursor(6,1);
@@ -742,10 +751,6 @@ void gaussMeterLoop(struct State*state, struct State* prevState) {
     }
   }
 }
-
-
-    
-
 
 void ohmMeterLoop(struct State*state, struct State* prevState) {
   if (prevState->ohmMeterMode == LOW || prevState->programmingMode == HIGH || prevState->inductanceMeterMode == HIGH || prevState->gaussMeterMode == HIGH) {
@@ -799,6 +804,8 @@ void ohmMeterLoop(struct State*state, struct State* prevState) {
   }
 }
 
+int nextStep = 0;
+int direction = 1;
 void scatter(struct State *state) {
 
   //calculate the waiting interval, the motor does 
@@ -811,27 +818,69 @@ void scatter(struct State *state) {
       state->scatterAttached = true;
     }
     unsigned long curTime = millis();
-    if (curTime - state->prevScatterTs > interval) {
-      state->prevScatterTs = curTime;
-      if (state->scatterPos == 0) {
-        state->scatterPos = 180;
-        scatterMotor.write(180-state->rightLimit);
-      } else {   
-        state->scatterPos = 0;
-        scatterMotor.write(180-state->leftLimit);
+    int speed = 10;
+
+    if (curTime - state->prevScatterTs > 40) {
+      if (state->scatterType == RANDOM) {
+        speed = random(state->scatterSpeed - 20, state->scatterSpeed + 20);
+      } else {
+        speed = state->scatterSpeed;
       }
       
+      state->prevScatterTs = curTime;
+      state->scatterPos = speed * direction + state->scatterPos;
+      
+      if (direction == 1) {        
+        if (state->scatterPos >= state->rightLimit) {
+          state->scatterPos = state->rightLimit;
+          direction = -1 * direction;
+        }     
+      } else {
+        if (state->scatterPos <= state->leftLimit) {
+          state->scatterPos = state->leftLimit;
+          direction = -1 * direction;
+        }
+      }
+      
+      scatterMotor.write(180-state->scatterPos);
+
     }
+    
+    
+//    if (curTime - state->prevScatterTs > interval) {
+//      state->prevScatterTs = curTime;
+//      
+//      if (state->scatterType==RANDOM) {
+//        timeVariation = random(0,100);
+//        Serial.println (timeVariation);
+//      }
+//
+//
+//      if (state->scatterPos == 0) {
+//        state->scatterPos = 180;
+//        scatterMotor.write(180-state->rightLimit);
+//
+//        if (state->scatterType == RANDOM) {
+//          scatterMotor
+//        }
+//        
+//      } else {   
+//        state->scatterPos = 0;
+//        scatterMotor.write(180-state->leftLimit);
+//      }
+//    }
   } else {
-    //TODO: save the state and do only once
-    state->scatterAttached = false;
-    scatterMotor.detach(); // start servo control
+    if (state->scatterAttached == true) {
+      state->scatterAttached = false;
+      scatterMotor.detach();
+    }
   }
 }
 
 int count = 0;
 int p = LOW;
 int r = LOW;
+
 
 void setup() {
   pinMode (PROG_PIN, INPUT_PULLUP);
@@ -866,6 +915,14 @@ void setup() {
   if (state.rightLimit < 90 || state.rightLimit > 180) {
     state.rightLimit = 180;
   }
+
+  state.scatterType = EEPROM.read(TYPE);
+  if (state.scatterType != UNIFORM && state.scatterType != RANDOM) {
+    state.scatterType = UNIFORM;
+  }
+
+  randomSeed(analogRead(A0));
+  
   lcd.backlight();
   splashScreen();
   lcd.clear();
