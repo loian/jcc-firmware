@@ -14,10 +14,11 @@ const int OHM_MODE_PIN = 31;
 const int INDUCTANCE_MODE_PIN = 32;
 const int GAUSS_MODE_PIN = 33;
 const int GAUSS_VALUE_PIN = A1;
- const int ENABLE_SCATTER_PIN = 34;                          
+const int ENABLE_SCATTER_PIN = 34;                          
 const int OHM_VALUE_PIN = 0;
 const int OPTICAL_SENSOR = 42;
 const int SCATTER_PIN = 12;
+const int MAXRPM = 2000;
 
 const int MOTOR_ENABLE = 13;
 const int MOTOR_IN1 = 40;
@@ -29,10 +30,21 @@ const int UNIFORM = 1;
 
 const int SERVO_SPEED = 12; //0.12 Sec/60 Degrees, type 12
 
+// EEPROM ADDRESSES
 #define LEFT  0
 #define RIGHT  1
 #define TYPE 2
+#define SPEED 3
+#define RPM_H 4
+#define RPM_L 5
+#define DIRECTION 6
 
+
+//TRAVERSE SPEED
+#define MIN_SPEED  1
+#define MAX_SPEED  30
+
+//GAUSS METER
 #define NOFIELD 505L    // Analog output with no applied field, calibrate this
 #define TOMILLIGAUSS 3756L  // A1302: 1.3mV=1Gaus, and 1024 analog steps = 5V, so 1 step = 3756mG
  
@@ -126,7 +138,7 @@ byte istoOnChar[] = {
  *****************/
 
 struct State {
-  long maxRPM = 3000;
+  long maxRPM = MAXRPM;
   long maxRounds = 0;
   char dir = CCW;
   long rounds = 0;
@@ -142,7 +154,7 @@ struct State {
   int scatterPos = 0;
   int scatterEnabled = HIGH;  
   int scatterType = UNIFORM;
-  int scatterSpeed = 30;
+  int scatterSpeed = MAX_SPEED;
   int leftLimit = 0;
   int rightLimit = 180;
   bool scatterAttached = false;
@@ -412,8 +424,14 @@ void scatterMenuScreen(struct State *state, struct State *prevState) {
     if (state->scatterType == RANDOM) {
       lcd.print("rand ");
     } else {
-      lcd.print("unif ");
+      lcd.print("uni  ");
     }
+
+    lcd.setCursor(11,0);
+    lcd.print("speed:");
+    lcd.print(state->scatterSpeed);
+    lcd.print(" ");
+
 
     lcd.setCursor(0,1);
     lcd.print("left:");
@@ -430,7 +448,7 @@ void scatterMenuScreen(struct State *state, struct State *prevState) {
     lcd.setCursor(0,2);
     lcd.print("A=type B=lt C=rt    ");
     lcd.setCursor(0,3);
-    lcd.print("D=exit 0=center");
+    lcd.print("D=exit 0=cnt 8=speed");
 }
 
 void scatterMenuLoop(struct State *state, struct State *prevState) {
@@ -451,15 +469,26 @@ void scatterMenuLoop(struct State *state, struct State *prevState) {
         pos = inputPosition(0,LEFT) ;
         state->leftLimit = pos;
         EEPROM.write(LEFT, pos);
+        scatterMenuScreen(state, prevState);  
         break;
       case 'C':
         pos = inputPosition(0,RIGHT) ;
         state->rightLimit = pos;
         EEPROM.write(RIGHT, pos);
+        scatterMenuScreen(state, prevState);  
         break;
       case '0':
         scatterMotor.attach(SCATTER_PIN);
         scatterMotor.write(90);
+        scatterMenuScreen(state, prevState);  
+        scatterMenuScreen(state, prevState);  
+        break;
+      case '8':
+        state->scatterSpeed  = inputNumberB(state->scatterSpeed, 17,0,2);
+        state->scatterSpeed = max(MIN_SPEED, state->scatterSpeed);
+        state->scatterSpeed = min(MAX_SPEED, state->scatterSpeed);        
+        EEPROM.write(SPEED, state->scatterSpeed);
+        scatterMenuScreen(state, prevState);          
         break;
     }
   }
@@ -477,6 +506,13 @@ void editWhenEditState(struct State *state, struct State *prevState) {
 
  if (state->currentState == RPM_EDIT) {
     state->maxRPM = inputNumberB(state->maxRPM, 16,0,4);
+    int rpmH = state->maxRPM/100;
+    int rpmL = state->maxRPM - rpmH*100;
+    Serial.println (rpmH);
+    Serial.println (rpmL);
+    
+    EEPROM.write(RPM_H,rpmH);
+    EEPROM.write(RPM_L,rpmL);
     state->currentState = IDLE_APP;
     stateSummary(state);
  }
@@ -484,6 +520,7 @@ void editWhenEditState(struct State *state, struct State *prevState) {
  
  if (state->currentState == DIR_EDIT) {
     state->dir = inputDirection(state->dir, 6,1);
+    EEPROM.write (DIRECTION, state->dir);
     state->currentState = IDLE_APP;
     stateSummary(state);
  }
@@ -500,7 +537,7 @@ void editWhenEditState(struct State *state, struct State *prevState) {
 void resetState() {
   state.maxRounds = 0;
   state.dir = CCW;
-  state.maxRPM = 3000;
+  state.maxRPM = MAXRPM;
   state.rounds = 0;
   state.prevScatterTs = 0;
   state.scatterPos = 0;
@@ -627,7 +664,7 @@ void spinMotor(struct State *state, unsigned long initialMillis) {
   }
 
   int speed = analogRead(MOTOR_POT);
-  speed = speed * state->maxRPM / 3000;
+  speed = speed * state->maxRPM / MAXRPM;
   speed = speed * 0.3;
   speed = rampUpSpeed(initialMillis, speed);
   if (speed>255) speed = 255;
@@ -919,6 +956,23 @@ void setup() {
   state.scatterType = EEPROM.read(TYPE);
   if (state.scatterType != UNIFORM && state.scatterType != RANDOM) {
     state.scatterType = UNIFORM;
+  }
+
+  state.scatterSpeed = EEPROM.read(SPEED);
+  if (state.scatterType < MIN_SPEED && state.scatterSpeed > MAX_SPEED) {
+    state.scatterSpeed = MAX_SPEED;
+  } 
+
+  int rpmH = EEPROM.read(RPM_H);
+  int rpmL = EEPROM.read(RPM_L);
+  state.maxRPM = 100*rpmH + rpmL;
+  if(state.maxRPM < 0 && state.maxRPM > MAXRPM) {
+    state.maxRPM = MAXRPM;
+  }
+
+  state.dir = EEPROM.read(DIRECTION);
+  if (state.dir != CCW && state.dir!=CW) {
+    state.dir = CCW;
   }
 
   randomSeed(analogRead(A0));
