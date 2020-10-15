@@ -9,26 +9,57 @@ LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4); // Change to (0x27,16,2)
 /******************************
  * PINS
  *****************************/
+//Mega 2560 wiring
 const int PROG_PIN = 30;
 const int OHM_MODE_PIN = 31;
 const int GAUSS_MODE_PIN = 32;
-const int GAUSS_VALUE_PIN = A1;
+const int PAUSE_PIN = 33;
 const int ENABLE_SCATTER_PIN = 34;                          
+
+const int GAUSS_VALUE_PIN = A1;
 const int OHM_VALUE_PIN = 0;
 const int OPTICAL_SENSOR = 42;
 const int SCATTER_PIN = 12;
-const int PAUSE_PIN = 33;
-const int MAXRPM = 2000;
 
 const int MOTOR_ENABLE = 13;
 const int MOTOR_IN1 = 40;
 const int MOTOR_IN2 = 41;
 const int MOTOR_POT = A2;
 
-const int RANDOM = 0;
-const int UNIFORM = 1;
 
+//Mega 2560 pro wiring
+//const int PROG_PIN = 16;
+//const int OHM_MODE_PIN = 15;
+//const int GAUSS_MODE_PIN = 14;
+//const int PAUSE_PIN = 13;
+//const int ENABLE_SCATTER_PIN = 16;                          
+
+
+//const int GAUSS_VALUE_PIN = A1;
+//const int OHM_VALUE_PIN = 0;
+//const int OPTICAL_SENSOR = 32;
+//const int SCATTER_PIN = 33;
+//
+//const int MOTOR_ENABLE = 10;
+//const int MOTOR_IN1 = 8;
+//const int MOTOR_IN2 = 9;
+//const int MOTOR_POT = A2;
+
+
+// CONFIG MOTORS
+const int MAXRPM = 2000;
 const int SERVO_SPEED = 12; //0.12 Sec/60 Degrees, type 12
+
+
+//CONFIG GAUSS METER
+#define NOFIELD 505L    // Analog output with no applied field, calibrate this
+#define TOMILLIGAUSS 3756L  // A1302: 1.3mV=1Gaus, and 1024 analog steps = 5V, so 1 step = 3756mG
+
+//CONFIG OHM METER
+const int RESISTANCE = 9970;
+
+
+//DON'T MODIFY WHAT FOLLOW
 
 // EEPROM ADDRESSES
 #define LEFT  0
@@ -39,26 +70,19 @@ const int SERVO_SPEED = 12; //0.12 Sec/60 Degrees, type 12
 #define RPM_L 5
 #define DIRECTION 6
 
+const int RANDOM = 0;
+const int UNIFORM = 1;
 
 //TRAVERSE SPEED
 #define MIN_SPEED  1
 #define MAX_SPEED  30
 
-//GAUSS METER
-#define NOFIELD 505L    // Analog output with no applied field, calibrate this
-#define TOMILLIGAUSS 3756L  // A1302: 1.3mV=1Gaus, and 1024 analog steps = 5V, so 1 step = 3756mG
- 
 /****************************
  * OHM METER
- */
-
-const int RESISTANCE = 9970;
+ ***************************/
 const long unsigned MIN_OHM = 500;
 const long unsigned MAX_OHM = 50000;
 const int VIN = 5;
-
-
-
 
 /******************************************
  * Keypad initialisaztion
