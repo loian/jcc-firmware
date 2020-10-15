@@ -33,8 +33,8 @@ const int MOTOR_POT = A2;
 //const int GAUSS_MODE_PIN = 14;
 //const int PAUSE_PIN = 13;
 //const int ENABLE_SCATTER_PIN = 16;                          
-
-
+//
+//
 //const int GAUSS_VALUE_PIN = A1;
 //const int OHM_VALUE_PIN = 0;
 //const int OPTICAL_SENSOR = 32;
