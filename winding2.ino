@@ -9,7 +9,7 @@ LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4); // Change to (0x27,16,2)
 /******************************
  * PINS
  *****************************/
-//Mega 2560 wiring
+////Mega 2560 wiring
 const int PROG_PIN = 30;
 const int OHM_MODE_PIN = 31;
 const int GAUSS_MODE_PIN = 32;
@@ -28,10 +28,10 @@ const int MOTOR_POT = A2;
 
 
 //Mega 2560 pro wiring
-//const int PROG_PIN = 16;
-//const int OHM_MODE_PIN = 15;
+//const int PROG_PIN = 12;
+//const int OHM_MODE_PIN = 13;
 //const int GAUSS_MODE_PIN = 14;
-//const int PAUSE_PIN = 13;
+//const int PAUSE_PIN = 15;
 //const int ENABLE_SCATTER_PIN = 16;                          
 //
 //
