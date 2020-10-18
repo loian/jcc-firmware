@@ -619,7 +619,7 @@ void gaussMeterScreen() {
 void programmingLoop(struct State*state, struct State* prevState) {
 
     //if there is a transition in the programming mode pin then clear the screen to display the new state
-    if (prevState->programmingMode == LOW || prevState == SCAT_MENU) {
+    if (prevState->programmingMode == LOW || prevState->currentState == SCAT_MENU) {
       lcd.clear();
       stateSummary(state);
     }
