@@ -26,6 +26,8 @@ const int MOTOR_IN1 = 40;
 const int MOTOR_IN2 = 41;
 const int MOTOR_POT = A2;
 
+const int OPTICAL_SENSOR_DEBOUCE_RATE = 60;
+
 
 //Mega 2560 pro wiring
 //const int PROG_PIN = 12;
@@ -735,7 +737,7 @@ void countLoop(struct State *state) {
     } 
     if (upTransition == true & read == HIGH) {
         highCount++;
-        if (highCount>40) {
+        if (highCount>OPTICAL_SENSOR_DEBOUCE_RATE) {
           upTransition = false;
           count++;
         }
@@ -744,7 +746,7 @@ void countLoop(struct State *state) {
     prevRead = read;
   
     unsigned long curTs =  millis();
-    if (curTs - ts >100) {
+    if (curTs - ts >300) {
       countLoopScreen(count, state->maxRounds);
       countIstogram(count,state->maxRounds);
       ts = curTs;
