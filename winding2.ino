@@ -26,7 +26,7 @@ const int MOTOR_IN1 = 40;
 const int MOTOR_IN2 = 41;
 const int MOTOR_POT = A2;
 
-const int OPTICAL_SENSOR_DEBOUCE_RATE = 60;
+const int OPTICAL_SENSOR_DEBOUCE_RATE = 2;
 
 
 //Mega 2560 pro wiring
@@ -732,6 +732,7 @@ void countLoop(struct State *state) {
     
     if (prevRead == LOW && read == HIGH) {
         upTransition = true;
+        highCount = 0;
     } else if (prevRead == HIGH && read == LOW){
         upTransition = false;
     } 
@@ -752,7 +753,6 @@ void countLoop(struct State *state) {
       ts = curTs;
     }
     
-
     if (count >= state->maxRounds) {
       countLoopScreen(state->maxRounds, state->maxRounds);
       lcd.setCursor(4,2);
