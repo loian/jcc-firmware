@@ -27,6 +27,7 @@ const int MOTOR_IN2 = 41;
 const int MOTOR_POT = A2;
 
 const int OPTICAL_SENSOR_DEBOUCE_RATE = 2;
+const int COUNTER_DISPLAY_REFRESH_TIME = 350;
 
 
 //Mega 2560 pro wiring
@@ -426,8 +427,8 @@ void goToProgramScreen() {
 void splashScreen() {
   lcd.setCursor(0, 0); // Set the cursor on the first column and first row.
   lcd.print("JCC Winding Machine"); // Print the string "Hello World!"
-  lcd.setCursor(4, 1); // Set the cursor on the first column and first row.
-  lcd.print("version 1.0"); // Print the string "Hello World!"
+  lcd.setCursor(3, 1); // Set the cursor on the first column and first row.
+  lcd.print("version 1.0.5"); // Print the string "Hello World!"
   lcd.setCursor(3, 2); // Set the cursor on the first column and first row.
   lcd.print("-------------"); // Print the string "Hello World!"
 
@@ -702,8 +703,6 @@ void countLoop(struct State *state) {
   
   int prevRead = HIGH; //prevOptState
   int count = 0;
-  int upTransition = true;
-  int highCount = 0;
   char key = 'x';
   
   scatterMotor.attach(SCATTER_PIN); // start servo control
@@ -721,33 +720,21 @@ void countLoop(struct State *state) {
     }
   }
 
-  int total = 0;
   int read = LOW;
   unsigned long ts = millis();
   while (key != 'D') {
     scatter(state);  
     spinMotor(state, initialMillis);
-    read = digitalRead(OPTICAL_SENSOR);
     key = keypad.getKey();
-    
+
+    read = digitalRead(OPTICAL_SENSOR);
     if (prevRead == LOW && read == HIGH) {
-        upTransition = true;
-        highCount = 0;
-    } else if (prevRead == HIGH && read == LOW){
-        upTransition = false;
+        count++;
     } 
-    if (upTransition == true & read == HIGH) {
-        highCount++;
-        if (highCount>OPTICAL_SENSOR_DEBOUCE_RATE) {
-          upTransition = false;
-          count++;
-        }
-    }
-      
     prevRead = read;
   
     unsigned long curTs =  millis();
-    if (curTs - ts >300) {
+    if (curTs - ts >COUNTER_DISPLAY_REFRESH_TIME) {
       countLoopScreen(count, state->maxRounds);
       countIstogram(count,state->maxRounds);
       ts = curTs;
